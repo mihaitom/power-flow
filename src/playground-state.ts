@@ -176,7 +176,7 @@ export function updateGrid() {
   const batteryLoad2Val = hasBl2.checked ? Number(batteryLoad2Inp.value) : 0;
   gridInp.value = String(
     Number(loadInp.value) -
-      solarVal -
+      solarVal +
       batteryVal +
       batteryLoad1Val +
       batteryLoad2Val,

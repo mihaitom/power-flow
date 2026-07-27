@@ -6,7 +6,7 @@ export interface FlowData {
   grid: number;
   /** House consumption (>= 0). */
   load: number;
-  /** Battery power. Positive = discharging (to house), negative = charging. Omit/null hides the battery node. */
+  /** Battery power. Positive = charging, negative = discharging (to house). Omit/null hides the battery node. */
   battery?: number | null;
   /** Battery state of charge in percent (0–100). */
   batterySoc?: number | null;

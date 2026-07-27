@@ -28,7 +28,11 @@ export function computeFlowAllocation(
 ): FlowAllocation {
   const solarWatts = data.solar ?? 0;
   const loadWatts = data.load ?? 0;
-  const batteryWatts = data.battery ?? 0;
+  // The public `data.battery` convention is positive = charging, negative =
+  // discharging; every formula below is written the other way around
+  // (positive = discharging) since that's the direction solar/grid feed the
+  // battery, so it's negated once here rather than flipping each comparison.
+  const batteryWatts = -(data.battery ?? 0);
   const batteryLoad1Watts = data.batteryLoad1 ?? 0;
   const batteryLoad2Watts = data.batteryLoad2 ?? 0;
 
@@ -38,9 +42,10 @@ export function computeFlowAllocation(
   // but since `battery` is only ever a single NET reading, a direct load
   // pulling power out of the battery pulls that net reading toward
   // discharge, so MORE gross charging (from solar/grid) is actually needed
-  // to still land on the reported net. E.g. battery netting -100W (charging)
-  // while also feeding 1150W of direct loads needs 1250W of gross charge,
-  // not 100W. `chargeNeed`/`dischargeAvailable` fold directLoads in up
+  // to still land on the reported net. E.g. `batteryWatts` (the
+  // discharge-positive internal value above) netting -100W (charging) while
+  // also feeding 1150W of direct loads needs 1250W of gross charge, not
+  // 100W. `chargeNeed`/`dischargeAvailable` fold directLoads in up
   // front so every formula below already accounts for it — they reduce to
   // the plain battery charge/discharge split whenever batteryLoad1/
   // batteryLoad2 are both 0.

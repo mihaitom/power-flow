@@ -89,7 +89,7 @@ const ROOT = path.resolve(__dirname, '..');
 const DIST_SITE = path.join(ROOT, 'dist-site');
 const SERVE_DIR = path.join(ROOT, 'node_modules/.cache/pf-serve');
 const PORT = 8081;
-const BASE = `/power-flow-diagram/`;
+const BASE = `/power-flow/`;
 const URL = `http://localhost:${PORT}${BASE}`;
 const CHROMIUM = '/usr/bin/chromium';
 const FRAMES = path.join(ROOT, 'node_modules/.cache/pf-frames');
@@ -98,10 +98,10 @@ const FRAMES = path.join(ROOT, 'node_modules/.cache/pf-frames');
 console.log('Building site…');
 execSync('npm run build:site', { cwd: ROOT, stdio: 'inherit' });
 
-// ── Step 2: set up static server at /power-flow-diagram/ ─────────────────────
+// ── Step 2: set up static server at /power-flow/ ─────────────────────
 fs.rmSync(SERVE_DIR, { recursive: true, force: true });
-fs.mkdirSync(path.join(SERVE_DIR, 'power-flow-diagram'), { recursive: true });
-execSync(`cp -r ${DIST_SITE}/. ${path.join(SERVE_DIR, 'power-flow-diagram')}/`);
+fs.mkdirSync(path.join(SERVE_DIR, 'power-flow'), { recursive: true });
+execSync(`cp -r ${DIST_SITE}/. ${path.join(SERVE_DIR, 'power-flow')}/`);
 
 const server = spawn(
   'python3',

@@ -14,19 +14,33 @@ consumer slots** — with dots whose speed is proportional to the actual power.
 
 <br />
 
-<img src="https://raw.githubusercontent.com/mihaitom/power-flow-diagram/main/docs/preview.gif" alt="powerflow — animated energy-flow diagram" width="460" />
+<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview.gif" alt="powerflow — animated energy-flow diagram" width="460" />
 
 <br />
 
-[**▶ Try the live playground**](https://mihaitom.github.io/power-flow-diagram/)
+### [▶ Try the live playground](https://mihaitom.github.io/power-flow/)
 
 <br />
 
-<img src="https://raw.githubusercontent.com/mihaitom/power-flow-diagram/main/docs/preview-outline.gif" alt="powerflow — outline node style, showing all four consumer slots plus a battery-fed load at once" width="320" />
-<img src="https://raw.githubusercontent.com/mihaitom/power-flow-diagram/main/docs/preview-filled.gif" alt="powerflow — filled node style, a balcony PV setup wired to charge only the battery" width="320" />
-<img src="https://raw.githubusercontent.com/mihaitom/power-flow-diagram/main/docs/preview-tonal.gif" alt="powerflow — tonal node style with full-size background icons and arrowhead flow dots" width="320" />
+---
 
-<sub>Same component, four looks — <code>soft</code> (above), <code>outline</code>, <code>filled</code>, <code>tonal</code> — all just an <a href="#nodestyle"><code>options.nodeStyle</code></a> away. The examples also show off the data side: the outline diagram's extra column only appears because that scenario actually uses <code>consumer3</code>/<code>consumer4</code>, the filled one is a balcony-PV <a href="#flowtopology"><code>topology</code></a> where solar can only reach the battery, and the tonal one adds <a href="#iconstyle"><code>iconStyle: 'full'</code></a> and <a href="#dotshape"><code>dotShape: 'triangle'</code></a> on top.</sub>
+Same component, four looks — all just an <a href="#nodestyle"><code>options.nodeStyle</code></a> away:
+
+<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-outline.gif" alt="powerflow — outline node style, showing all four consumer slots plus a battery-fed load at once" height="420" />
+
+<sub><code>outline</code> — the extra column only appears because this scenario actually uses <code>consumer3</code>/<code>consumer4</code>.</sub>
+
+<br /><br />
+
+<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-filled.gif" alt="powerflow — filled node style, a balcony PV setup wired to charge only the battery" height="420" />
+
+<sub><code>filled</code> — a balcony-PV <a href="#flowtopology"><code>topology</code></a> where solar can only reach the battery.</sub>
+
+<br /><br />
+
+<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-tonal.gif" alt="powerflow — tonal node style with full-size background icons and arrowhead flow dots" height="420" />
+
+<sub><code>tonal</code> — with <a href="#iconstyle"><code>iconStyle: 'full'</code></a> and <a href="#dotshape"><code>dotShape: 'triangle'</code></a> on top.</sub>
 
 </div>
 
@@ -54,6 +68,8 @@ crisp scalable vectors; no runtime framework dependency.
   grid ring shows export sources; battery ring shows state of charge.
 - **Themeable** — every node colour (including separate charge/discharge colours
   for battery and grid), every label, and every node icon is overridable.
+- **Four node styles** — soft, tonal, outline or filled, switchable live via
+  `options.nodeStyle` (see the examples above).
 - **Adjustable animation** — dot speed multiplier lets you slow down or speed up
   the flow independently of the power values.
 - **Configurable look** — full-size background icons, arrow-shaped flow dots,
@@ -88,7 +104,7 @@ npm install powerflow
     solar: 3000, // PV production (W); omit/null hides the node
     grid: -600, // grid power: positive = import, negative = export
     load: 2400, // total house consumption (W)
-    battery: -500, // negative = charging, positive = discharging; omit/null hides
+    battery: 500, // positive = charging, negative = discharging; omit/null hides
     batterySoc: 72, // state of charge in % (optional, shows SoC ring)
     consumer1: 3600, // generic house consumer, drawn above the house (optional)
     consumer2: 3600, // second house consumer, drawn below the house (optional)
@@ -213,7 +229,7 @@ e.g. `pf.options = { ...pf.options, iconStyle: 'full' }`.
 | `solar`      | `number \| null` | Solar / PV production (≥ 0). Optional.                   |
 | `grid`       | `number`         | Grid power. Positive = import, negative = export.        |
 | `load`       | `number`         | Total house consumption (≥ 0).                           |
-| `battery`    | `number \| null` | Positive = discharging, negative = charging. Optional.   |
+| `battery`    | `number \| null` | Positive = charging, negative = discharging. Optional.   |
 | `batterySoc` | `number \| null` | Battery state of charge in percent. Optional.            |
 | `consumer1`  | `number \| null` | Home consumer 1, drawn top-left of the house. Optional.     |
 | `consumer2`  | `number \| null` | Home consumer 2, drawn bottom-left of the house. Optional.  |
@@ -292,7 +308,7 @@ dot.
 Balcony-PV example — a PV source with no direct link to the house/grid:
 
 ```ts
-pf.data = { solar: 600, grid: 200, load: 900, battery: -300 };
+pf.data = { solar: 600, grid: 200, load: 900, battery: 300 };
 pf.options = { ...pf.options, topology: { solarToHome: false, solarToGrid: false } };
 ```
 
@@ -408,7 +424,7 @@ feeds, with nothing double-counted:
    are folded into the battery's charge/discharge need first — since
    `battery` is only ever a single net reading, a direct load pulls that
    reading toward discharge, so more gross charging may actually be needed
-   than the net figure alone suggests (e.g. a battery netting −100 W while
+   than the net figure alone suggests (e.g. a battery netting +100 W while
    also feeding 1150 W of direct loads needs 1250 W of gross charge in, not
    100 W),
 2. a **charging battery** is fed from solar first (the rest from the grid),
@@ -423,11 +439,12 @@ leg. It isn't simply discarded, though — e.g. if solar's only enabled route
 is the battery, all of it is pushed in, and any excess beyond what's needed
 is reconstructed as extra battery discharge rather than vanishing.
 
-This matches the convention of
-[power-flow-card-plus](https://github.com/flixlix/power-flow-card-plus), so e.g.
-`solar 1000 W, load 1000 W, battery charging 100 W, grid +100 W` correctly shows
-solar→battery 100, solar→home 900 and grid→home 100 — not a single solar→home
-line.
+This mirrors the priority order
+[power-flow-card-plus](https://github.com/flixlix/power-flow-card-plus) uses
+(its exact sign convention for `battery` differs — see `FlowData` above), so
+e.g. `solar 1000 W, load 1000 W, battery charging 100 W, grid +100 W` correctly
+shows solar→battery 100, solar→home 900 and grid→home 100 — not a single
+solar→home line.
 
 ## Development
 

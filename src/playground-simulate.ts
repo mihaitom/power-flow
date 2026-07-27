@@ -118,13 +118,13 @@ btn.addEventListener('click', () => {
     let battery = 0;
     if (hasBat.checked) {
       const net = solar - load;
-      if (net > 0 && soc < 100) battery = -Math.min(net, 4000);
-      else if (net < 0 && soc > 0) battery = Math.min(-net, 4000);
-      // The battery must discharge at least enough to cover its own direct
-      // loads — but only bump it up, never force a charging (negative)
-      // reading toward zero when no direct load is active.
-      if (directBatteryLoad > 0) battery = Math.max(battery, directBatteryLoad);
-      soc = Math.max(0, Math.min(100, soc - battery * 0.005));
+      if (net > 0 && soc < 100) battery = Math.min(net, 4000);
+      else if (net < 0 && soc > 0) battery = -Math.min(-net, 4000);
+      // The battery must discharge (negative) at least enough to cover its
+      // own direct loads — but only push it further negative, never force a
+      // charging (positive) reading toward zero when no direct load is active.
+      if (directBatteryLoad > 0) battery = Math.min(battery, -directBatteryLoad);
+      soc = Math.max(0, Math.min(100, soc + battery * 0.005));
     }
 
     inp.solar.value = String(solar);

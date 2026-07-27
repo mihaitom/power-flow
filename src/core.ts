@@ -607,7 +607,7 @@ export class PowerFlow {
     // ── Battery node ── (colour follows charge/discharge, like the grid node)
     if (hasBattery) {
       const batteryColor =
-        batteryWatts < 0 ? colors.batteryIn : colors.batteryOut;
+        batteryWatts > 0 ? colors.batteryIn : colors.batteryOut;
       this.paintNode('bat', batteryColor);
       const soc = this.el['t-bat-soc'] as SVGTextElement;
       soc.style.display = data.batterySoc != null ? '' : 'none';
@@ -617,7 +617,7 @@ export class PowerFlow {
       // Same accent-colored-value pattern (and same `filled`-mode fixup) as
       // the grid node's value text above.
       watts.style.fill = this.nodeStyle === 'filled' ? FILLED_INK : batteryColor;
-      watts.textContent = `${batteryWatts >= 0 ? '↑' : '↓'} ${formatWatts(Math.abs(batteryWatts))}`;
+      watts.textContent = `${batteryWatts > 0 ? '↓' : '↑'} ${formatWatts(Math.abs(batteryWatts))}`;
       this.labelText('t-bat-lbl', labels.battery);
       // SoC inner ring — progress arc from 12 o'clock clockwise. Same
       // `filled`-mode fixup as the value texts above: unlike the home/grid

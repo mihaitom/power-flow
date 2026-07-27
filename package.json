@@ -5,13 +5,13 @@
   "type": "module",
   "license": "MIT",
   "author": "Thomas Mihailovits",
-  "homepage": "https://mihaitom.github.io/power-flow-diagram/",
+  "homepage": "https://mihaitom.github.io/power-flow/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mihaitom/power-flow-diagram.git"
+    "url": "git+https://github.com/mihaitom/power-flow.git"
   },
   "bugs": {
-    "url": "https://github.com/mihaitom/power-flow-diagram/issues"
+    "url": "https://github.com/mihaitom/power-flow/issues"
   },
   "keywords": [
     "solar",
