@@ -33,6 +33,9 @@ export class PowerFlowElement extends HTMLElement {
   private _icons: Partial<FlowIcons> | undefined;
   private _speedScale: number | undefined;
   private _topology: Partial<FlowTopology> | undefined;
+  private _iconStyle: 'default' | 'full' | undefined;
+  private _dotShape: 'circle' | 'triangle' | undefined;
+  private _curveBend: number | undefined;
 
   set data(value: FlowData) {
     this._data = value;
@@ -82,6 +85,30 @@ export class PowerFlowElement extends HTMLElement {
     return this._topology;
   }
 
+  set iconStyle(value: 'default' | 'full' | undefined) {
+    this._iconStyle = value;
+    this.render();
+  }
+  get iconStyle(): 'default' | 'full' | undefined {
+    return this._iconStyle;
+  }
+
+  set dotShape(value: 'circle' | 'triangle' | undefined) {
+    this._dotShape = value;
+    this.render();
+  }
+  get dotShape(): 'circle' | 'triangle' | undefined {
+    return this._dotShape;
+  }
+
+  set curveBend(value: number | undefined) {
+    this._curveBend = value;
+    this.render();
+  }
+  get curveBend(): number | undefined {
+    return this._curveBend;
+  }
+
   connectedCallback() {
     this.render();
   }
@@ -117,6 +144,9 @@ export class PowerFlowElement extends HTMLElement {
       icons: this._icons,
       speedScale: this._speedScale,
       topology: this._topology,
+      iconStyle: this._iconStyle,
+      dotShape: this._dotShape,
+      curveBend: this._curveBend,
     };
     if (this.pf) {
       this.pf.update(options);

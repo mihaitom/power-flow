@@ -57,6 +57,29 @@
 
         <hr />
 
+        <div class="section-title">Appearance</div>
+        <label class="toggle">
+          <input id="icon-style-full" type="checkbox" /> Full-size icons
+          (behind labels)
+        </label>
+        <label class="toggle">
+          <input id="dot-shape-triangle" type="checkbox" /> Triangle dots
+          (point in flow direction)
+        </label>
+        <div class="ctrl">
+          <label>Curve bend <span class="v" id="v-curve-bend"></span></label>
+          <input
+            id="curve-bend"
+            type="range"
+            min="0"
+            max="2.0"
+            step="0.1"
+            value="1"
+          />
+        </div>
+
+        <hr />
+
         <div class="section-title">Ring colors</div>
         <div class="colors">
           <label>Home <input type="color" id="c-home" value="#818cf8" /></label>

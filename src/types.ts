@@ -110,4 +110,17 @@ export interface PowerFlowOptions {
   speedScale?: number;
   /** Enable/disable individual built-in connections. Defaults to all `true`. */
   topology?: Partial<FlowTopology>;
+  /** `'full'` draws each node's icon large behind the value/label text
+   *  (dimmed, as a background) instead of small above it. Default `'default'`. */
+  iconStyle?: 'default' | 'full';
+  /** `'triangle'` draws flow dots as small arrowheads that point in their
+   *  direction of travel, instead of plain circles. Default `'circle'`. */
+  dotShape?: 'circle' | 'triangle';
+  /** Scales the diagram's curved connections by stretching/shrinking how far
+   *  each one travels in its fixed departure/arrival direction before
+   *  turning. `0` collapses them into direct lines, `1` (the default) is
+   *  today's curve, values above `1` hold the straight direction longer with
+   *  a sharper turn in between. Clamped to `0–2` internally to keep curves
+   *  from crossing neighboring nodes. */
+  curveBend?: number;
 }

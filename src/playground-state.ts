@@ -95,6 +95,23 @@ speedInp.addEventListener('input', () => {
 });
 export { speedInp, vSpeed };
 
+// ── Appearance ────────────────────────────────────────────────────────────────
+const iconStyleInp = document.getElementById('icon-style-full') as HTMLInputElement;
+iconStyleInp.addEventListener('input', () => {
+  el.iconStyle = iconStyleInp.checked ? 'full' : 'default';
+});
+const dotShapeInp = document.getElementById('dot-shape-triangle') as HTMLInputElement;
+dotShapeInp.addEventListener('input', () => {
+  el.dotShape = dotShapeInp.checked ? 'triangle' : 'circle';
+});
+const curveBendInp = document.getElementById('curve-bend') as HTMLInputElement;
+const vCurveBend = document.getElementById('v-curve-bend') as HTMLElement;
+vCurveBend.textContent = `${curveBendInp.value}×`;
+curveBendInp.addEventListener('input', () => {
+  vCurveBend.textContent = `${curveBendInp.value}×`;
+  el.curveBend = Number(curveBendInp.value);
+});
+
 // ── Slider logic ──────────────────────────────────────────────────────────────
 const consumer1Inp = document.getElementById('consumer1') as HTMLInputElement;
 const consumer2Inp = document.getElementById('consumer2') as HTMLInputElement;

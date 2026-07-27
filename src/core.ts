@@ -7,7 +7,7 @@ import type {
 } from './types';
 import { DEFAULT_COLORS, DEFAULT_LABELS, DEFAULT_ICONS, DEFAULT_TOPOLOGY } from './defaults';
 import { computeFlowAllocation } from './flow-allocation';
-import { CSS, SKELETON, DOTS, DOT_CLS_TO_COLOR_VAR, trackIdFor } from './skeleton';
+import { CSS, SKELETON, DOTS, DOT_CLS_TO_COLOR_VAR, CURVES, trackIdFor } from './skeleton';
 
 export type {
   FlowData,
@@ -44,6 +44,31 @@ export class PowerFlow {
   // rather than a flow.
   private static readonly CONFLICT_COLOR = '#ef4444';
 
+  // Every node's icon + its 1-3 text lines below it, for iconStyle: 'full'
+  // (see applyIconStyle()). Read from the skeleton rather than duplicated
+  // here: each entry's *default*-mode transform/y values are cached once from
+  // the static SVG at construction time, not hardcoded a second time.
+  private static readonly ICON_LAYOUT_NODES: { prefix: string; icon: string; texts: string[] }[] = [
+    { prefix: 'solar', icon: 'solar-icon', texts: ['t-solar-val', 't-solar-lbl'] },
+    { prefix: 'grid', icon: 'grid-icon', texts: ['t-grid-val', 't-grid-lbl'] },
+    { prefix: 'home', icon: 'home-icon', texts: ['t-home-val', 't-home-lbl'] },
+    { prefix: 'bat', icon: 'bat-icon', texts: ['t-bat-soc', 't-bat-watts', 't-bat-lbl'] },
+    { prefix: 'c1', icon: 'c1-icon', texts: ['t-c1-val', 't-c1-lbl'] },
+    { prefix: 'c2', icon: 'c2-icon', texts: ['t-c2-val', 't-c2-lbl'] },
+    { prefix: 'c3', icon: 'c3-icon', texts: ['t-c3-val', 't-c3-lbl'] },
+    { prefix: 'c4', icon: 'c4-icon', texts: ['t-c4-val', 't-c4-lbl'] },
+    { prefix: 'bl1', icon: 'bl1-icon', texts: ['t-bl1-val', 't-bl1-lbl'] },
+    { prefix: 'bl2', icon: 'bl2-icon', texts: ['t-bl2-val', 't-bl2-lbl'] },
+    { prefix: 'conflict', icon: 'conflict-icon', texts: ['t-conflict-lbl'] },
+  ];
+  // Populated once in cacheIconLayouts(), keyed by prefix — the exact
+  // transform/y values the static skeleton shipped with, so 'default' mode
+  // can restore them verbatim instead of re-deriving them.
+  private iconLayoutCache: Record<
+    string,
+    { iconTransform: string; textY: string[]; textFontSize: string[] }
+  > = {};
+
   private root: ShadowRoot;
   private svg!: SVGSVGElement;
   private el: Record<string, Element> = {};
@@ -52,6 +77,9 @@ export class PowerFlow {
   private icons: FlowIcons = { ...DEFAULT_ICONS };
   private topology: FlowTopology = DEFAULT_TOPOLOGY;
   private speedScale = 1;
+  private iconStyle: 'default' | 'full' = 'default';
+  private dotShape: 'circle' | 'triangle' = 'circle';
+  private curveBend = 1;
   // Tracks whether the consumer2/batteryLoad2 slot conflict was already active
   // last render, so the console warning fires once per transition into the
   // conflicting state rather than on every `update()` call.
@@ -65,6 +93,12 @@ export class PowerFlow {
     string,
     {
       circle: SVGCircleElement;
+      // Triangle-shape variant of the same dot (dotShape: 'triangle') — the
+      // <g> carries position+rotation (JS-set transform attribute), while
+      // the polygon inside carries the shrink pop-in/out CSS transition (see
+      // skeleton.ts's CSS comment on why these can't be the same element).
+      triangleGroup: SVGGElement;
+      trianglePolygon: SVGPolygonElement;
       path: SVGPathElement;
       length: number;
       speed: number; // px/s
@@ -84,6 +118,7 @@ export class PowerFlow {
     this.svg = this.root.querySelector('svg')!;
     this.cacheRefs();
     this.initDots();
+    this.cacheIconLayouts();
     this.update(options);
     this.lastTime = performance.now();
     this.raf = requestAnimationFrame(this.tick);
@@ -99,9 +134,14 @@ export class PowerFlow {
     for (const d of DOTS) {
       const path = this.svg.querySelector<SVGPathElement>(`#${d.path}`)!;
       const circle = this.el[`dot-${d.id}`] as SVGCircleElement;
+      const triangleGroup = this.el[`dot-tri-${d.id}`] as SVGGElement;
+      const trianglePolygon = triangleGroup.querySelector('polygon')!;
       circle.style.display = 'none';
+      triangleGroup.style.display = 'none';
       this.dots[d.id] = {
         circle,
+        triangleGroup,
+        trianglePolygon,
         path,
         length: path.getTotalLength(),
         speed: 0,
@@ -113,12 +153,148 @@ export class PowerFlow {
     }
   }
 
+  // The marker element currently shown for a dot (its `display` is toggled
+  // in setDot()), depending on the active dotShape.
+  private activeMarker(s: PowerFlow['dots'][string]): SVGGraphicsElement {
+    return this.dotShape === 'triangle' ? s.triangleGroup : s.circle;
+  }
+
+  // The element that actually gets the `.shrunk` pop-in/out class — for
+  // triangles that's the inner polygon, not the position/rotation-carrying
+  // <g> (see the `dots` field comment above for why).
+  private shrinkTarget(s: PowerFlow['dots'][string]): Element {
+    return this.dotShape === 'triangle' ? s.trianglePolygon : s.circle;
+  }
+
+  // Snapshots each node's *default*-mode icon transform and text y positions
+  // straight from the static skeleton, once, before iconStyle ever touches
+  // them — so 'default' mode can restore them exactly without re-deriving
+  // (and re-hardcoding) the same offsets a second time.
+  private cacheIconLayouts() {
+    for (const { prefix, icon, texts } of PowerFlow.ICON_LAYOUT_NODES) {
+      const iconEl = this.el[icon];
+      this.iconLayoutCache[prefix] = {
+        iconTransform: iconEl?.getAttribute('transform') ?? '',
+        textY: texts.map((id) => this.el[id]?.getAttribute('y') ?? '0'),
+        textFontSize: texts.map(
+          (id) => (this.el[id] as SVGTextElement | undefined)?.style.fontSize ?? '',
+        ),
+      };
+    }
+  }
+
+  // iconStyle: 'default' restores the cached original layout; 'full' enlarges
+  // the icon to fill most of the node (dimmed via the node-icon-full CSS
+  // class) and centers the text block over it. Node center/radius are read
+  // from the node's own `${prefix}-bg` circle rather than hardcoded, so this
+  // works uniformly for every node regardless of its position or size.
+  // Text elements don't all share one base font-size (val-text is 14px,
+  // lbl-text 11px, and t-bat-watts overrides its own val-text down to 11px
+  // inline) — read each one's own cached size (or its CSS-class default) so
+  // the 'full'-mode bump scales *from whatever that element actually is*,
+  // not a single hardcoded number.
+  private static bumpedFontSize(el: SVGTextElement, cachedSize: string): string {
+    const base = parseFloat(cachedSize) || (el.classList.contains('val-text') ? 14 : 11);
+    return `${(base * 1.15).toFixed(1)}px`;
+  }
+
+  private applyIconStyle() {
+    for (const { prefix, icon, texts } of PowerFlow.ICON_LAYOUT_NODES) {
+      const iconEl = this.el[icon];
+      const textEls = texts.map((id) => this.el[id] as SVGTextElement | undefined);
+      const cached = this.iconLayoutCache[prefix];
+      if (this.iconStyle === 'default') {
+        iconEl?.setAttribute('transform', cached.iconTransform);
+        iconEl?.classList.remove('node-icon-full');
+        textEls.forEach((t, i) => {
+          t?.setAttribute('y', cached.textY[i]);
+          if (t) t.style.fontSize = cached.textFontSize[i];
+          t?.classList.remove('text-on-full');
+        });
+        continue;
+      }
+      const bg = this.el[`${prefix}-bg`] as SVGCircleElement | undefined;
+      if (!bg) continue;
+      const cx = Number(bg.getAttribute('cx'));
+      const cy = Number(bg.getAttribute('cy'));
+      const r = Number(bg.getAttribute('r'));
+      const size = r * 1.5;
+      iconEl?.setAttribute(
+        'transform',
+        `translate(${cx - size / 2} ${cy - size / 2}) scale(${size / 24})`,
+      );
+      iconEl?.classList.add('node-icon-full');
+      const lineGap = 13;
+      const startY = cy - ((textEls.length - 1) * lineGap) / 2 + 4;
+      textEls.forEach((t, i) => {
+        t?.setAttribute('y', String(startY + i * lineGap));
+        if (t) t.style.fontSize = PowerFlow.bumpedFontSize(t, cached.textFontSize[i]);
+        t?.classList.add('text-on-full');
+      });
+    }
+  }
+
+  // Scales each of the 6 curved tracks' *tangent handles* — P1 relative to
+  // P0, P2 relative to P3 — by `bend`, keeping their direction fixed. This
+  // keeps the departure/arrival directions exactly as designed (e.g. "leaves
+  // solar straight down, arrives at home straight across") at every bend
+  // level, only changing how long the curve holds that direction before
+  // turning: bend=0 collapses both handles onto their anchor point, which
+  // degenerates the cubic bezier into the straight P0→P3 line; bend=1
+  // reproduces today's static `d` values exactly (the handles are already at
+  // that today's exact length); bend>1 stretches the handles further out,
+  // reading as a straighter departure/arrival with a sharper turn in the
+  // middle, rather than one continuously bulging arc.
+  private applyCurveBend() {
+    const bend = this.curveBend;
+    for (const { id, p0, p1, p2, p3 } of CURVES) {
+      const path = this.el[id] as SVGPathElement | undefined;
+      if (!path) continue;
+      const b1x = p0[0] + bend * (p1[0] - p0[0]);
+      const b1y = p0[1] + bend * (p1[1] - p0[1]);
+      const b2x = p3[0] + bend * (p2[0] - p3[0]);
+      const b2y = p3[1] + bend * (p2[1] - p3[1]);
+      path.setAttribute('d', `M${p0[0]},${p0[1]} C${b1x},${b1y} ${b2x},${b2y} ${p3[0]},${p3[1]}`);
+    }
+    // Changing `d` changes each affected path's total length — every dot's
+    // cached `length` (measured once in initDots()) would otherwise go stale
+    // and skew its speed/position math. `s.prog` is a 0..1 fraction, so
+    // refreshing `length` here doesn't cause any jump.
+    for (const id in this.dots) {
+      const s = this.dots[id];
+      s.length = s.path.getTotalLength();
+    }
+  }
+
+  // How far (in px along the path) placeDot() samples on either side of a
+  // triangle dot's position to find its direction of travel.
+  private static readonly TANGENT_SAMPLE_PX = 0.5;
+
   // Position along the path for a dot's current progress, honouring `reverse`.
+  // For triangle dots, also orients the arrowhead along its direction of
+  // travel — found via a central-difference sample around the current
+  // position, so it's correct for both `reverse` and non-`reverse` dots (and
+  // for paths shared by both directions, like p-bat-grid) without needing to
+  // special-case `reverse` itself.
   private placeDot(s: PowerFlow['dots'][string]) {
     const at = s.reverse ? 1 - s.prog : s.prog;
-    const p = s.path.getPointAtLength(at * s.length);
-    s.circle.setAttribute('cx', String(p.x));
-    s.circle.setAttribute('cy', String(p.y));
+    const currentLen = at * s.length;
+    const p = s.path.getPointAtLength(currentLen);
+    if (this.dotShape === 'triangle') {
+      const dir = s.reverse ? -1 : 1;
+      const d = PowerFlow.TANGENT_SAMPLE_PX;
+      const ahead = s.path.getPointAtLength(
+        Math.max(0, Math.min(s.length, currentLen + dir * d)),
+      );
+      const behind = s.path.getPointAtLength(
+        Math.max(0, Math.min(s.length, currentLen - dir * d)),
+      );
+      const angle = (Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * 180) / Math.PI;
+      s.triangleGroup.setAttribute('transform', `translate(${p.x} ${p.y}) rotate(${angle})`);
+    } else {
+      s.circle.setAttribute('cx', String(p.x));
+      s.circle.setAttribute('cy', String(p.y));
+    }
   }
 
   // Single animation loop for all dots. Advances each visible dot along its path
@@ -155,6 +331,17 @@ export class PowerFlow {
     if (options.topology !== undefined) {
       this.topology = { ...DEFAULT_TOPOLOGY, ...options.topology };
     }
+    if (options.iconStyle !== undefined) {
+      this.iconStyle = options.iconStyle;
+    }
+    if (options.curveBend !== undefined) {
+      this.curveBend = Math.max(0, Math.min(2.0, options.curveBend));
+    }
+    if (options.dotShape !== undefined && options.dotShape !== this.dotShape) {
+      this.swapDotShape(options.dotShape);
+    }
+    this.applyIconStyle();
+    this.applyCurveBend();
     const { colors, labels, icons, topology: topo } = this;
 
     this.setIconPath('solar-icon', icons.solar);
@@ -561,6 +748,8 @@ export class PowerFlow {
   // makes the dot jump back to the start.
   private setDot(id: string, visible: boolean, watts: number) {
     const s = this.dots[id];
+    const marker = this.activeMarker(s);
+    const shrinkEl = this.shrinkTarget(s);
     if (visible) {
       s.speed = this.flowSpeed(watts, s.length);
       if (!s.visible) {
@@ -569,23 +758,43 @@ export class PowerFlow {
         s.visible = true;
         s.shrinking = false;
         this.placeDot(s);
-        s.circle.classList.add('shrunk');
-        s.circle.style.display = '';
+        shrinkEl.classList.add('shrunk');
+        marker.style.display = '';
         requestAnimationFrame(() => requestAnimationFrame(() => {
-          if (s.visible) s.circle.classList.remove('shrunk');
+          if (s.visible) shrinkEl.classList.remove('shrunk');
         }));
       }
     } else if (s.visible) {
       // Shrink out: keep moving while scaling to 0, then hide after the transition.
       s.visible = false;
       s.shrinking = true;
-      s.circle.classList.add('shrunk');
+      shrinkEl.classList.add('shrunk');
       s.hideTimer = setTimeout(() => {
-        s.circle.style.display = 'none';
-        s.circle.classList.remove('shrunk');
+        marker.style.display = 'none';
+        shrinkEl.classList.remove('shrunk');
         s.shrinking = false;
         s.hideTimer = undefined;
       }, 200);
+    }
+  }
+
+  // Live-swaps which marker shape is shown for every currently visible or
+  // shrinking dot, so toggling dotShape mid-animation doesn't leave a dot
+  // stuck invisible (old shape hidden, new shape never shown) or duplicated
+  // (both shapes visible at once).
+  private swapDotShape(newShape: 'circle' | 'triangle') {
+    for (const id in this.dots) {
+      const s = this.dots[id];
+      if (!s.visible && !s.shrinking) continue;
+      this.activeMarker(s).style.display = 'none';
+      this.shrinkTarget(s).classList.remove('shrunk');
+    }
+    this.dotShape = newShape;
+    for (const id in this.dots) {
+      const s = this.dots[id];
+      if (!s.visible && !s.shrinking) continue;
+      this.activeMarker(s).style.display = '';
+      this.placeDot(s);
     }
   }
 

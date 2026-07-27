@@ -62,6 +62,26 @@ export function trackIdFor(pathId: string): string {
   return 'use-' + pathId.slice(2);
 }
 
+// The 6 tracks that are true cubic bezier curves (the rest are straight H/V
+// lines). Control points are exactly today's static `d` values below, so
+// `curveBend = 1` (the default) reproduces the current geometry precisely —
+// see applyCurveBend() in core.ts, which blends each point toward the
+// straight P0→P3 line as `curveBend` drops toward 0.
+export const CURVES: {
+  id: string;
+  p0: [number, number];
+  p1: [number, number];
+  p2: [number, number];
+  p3: [number, number];
+}[] = [
+  { id: 'p-solar-home', p0: [212, 112], p1: [212, 150], p2: [256, 173], p3: [294, 173] },
+  { id: 'p-solar-grid', p0: [188, 112], p1: [188, 150], p2: [144, 173], p3: [106, 173] },
+  { id: 'p-bat-home', p0: [212, 258], p1: [212, 220], p2: [256, 197], p3: [294, 197] },
+  { id: 'p-bat-grid', p0: [188, 258], p1: [188, 220], p2: [144, 197], p3: [106, 197] },
+  { id: 'p-home-consumer4', p0: [396, 197], p1: [434, 197], p2: [478, 220], p3: [478, 258] },
+  { id: 'p-home-consumer3', p0: [396, 173], p1: [434, 173], p2: [478, 150], p3: [478, 112] },
+];
+
 export const CSS = `
 :host { display: block; }
 /* Fill the host box in both dimensions; preserveAspectRatio="meet" (the SVG
@@ -102,10 +122,28 @@ export const CSS = `
 .dot.battery-load1 { fill: var(--sfd-battery-load1); stroke: var(--sfd-battery-load1); }
 .dot.battery-load2 { fill: var(--sfd-battery-load2); stroke: var(--sfd-battery-load2); }
 
+/* Triangle dot variant (dotShape: 'triangle') — a filled arrowhead instead of
+   a stroked circle; the surrounding <g> carries position+rotation as a JS-set
+   transform attribute every frame, so the pop-in/out shrink transition below
+   lives on the polygon itself (a CSS transform on the <g> would win over
+   its attribute and silently break the positioning). */
+.dot.dot-tri { stroke: none; stroke-width: 0; }
+.dot-tri {
+  transform: scale(1);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.dot-tri.shrunk {
+  transform: scale(0);
+  transition: transform 0.18s ease-in;
+}
+
 .node { transition: opacity 0.35s ease; }
 .node-bg { stroke: none; transition: fill 0.35s ease; }
 .node-ring { fill: none; stroke-width: 2.5; transition: stroke 0.35s ease; }
 .node-icon { transition: fill 0.35s ease; }
+/* iconStyle: 'full' — the icon fills most of the node as a dimmed background
+   so the value/label text stays legible on top. */
+.node-icon.node-icon-full { opacity: 0.22; }
 .node.dim { opacity: 0.3; }
 
 .home-arc {
@@ -127,6 +165,11 @@ export const CSS = `
   font-weight: 500;
   letter-spacing: 0.04em;
 }
+/* iconStyle: 'full' — sits over a large dimmed icon instead of plain
+   background, so a drop shadow helps it stay legible. Font-size itself is
+   set directly in JS (applyIconStyle()), not here, since t-bat-watts already
+   carries its own inline font-size that a CSS rule couldn't override. */
+.text-on-full { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7), 0 1px 6px rgba(0, 0, 0, 0.5); }
 `;
 
 // Static SVG skeleton. Every node, track and dot is present from the start;
@@ -192,7 +235,10 @@ export const SKELETON = `
 
   ${DOTS.map(
     (d) =>
-      `<circle id="dot-${d.id}" r="2" class="dot ${d.cls}" vector-effect="non-scaling-stroke" />`,
+      `<circle id="dot-${d.id}" r="2" class="dot ${d.cls}" vector-effect="non-scaling-stroke" />
+  <g id="dot-tri-${d.id}" class="dot-tri-wrap">
+    <polygon points="-4,-3.5 -4,3.5 6,0" class="dot dot-tri ${d.cls}" vector-effect="non-scaling-stroke" />
+  </g>`,
   ).join('\n  ')}
 
   <!-- Coverage rings, drawn under the node bodies. The home ring shows how

@@ -48,7 +48,9 @@ crisp scalable vectors; no runtime framework dependency.
   for battery and grid), every label, and every node icon is overridable.
 - **Adjustable animation** — dot speed multiplier lets you slow down or speed up
   the flow independently of the power values.
-- **Tiny & isolated** — ~7 kB min+gzip, zero runtime deps, shadow DOM so its
+- **Configurable look** — full-size background icons, arrow-shaped flow dots,
+  and adjustable curve bend are all opt-in via `iconStyle`/`dotShape`/`curveBend`.
+- **Tiny & isolated** — ~11 kB min+gzip, zero runtime deps, shadow DOM so its
   styles never leak into your app.
 
 ## Install
@@ -163,6 +165,9 @@ leak into your app.
 | `icons`           | `Partial<FlowIcons>`  | Override node icons (any SVG `<path d="">` string).       |
 | `speedScale`      | `number`              | Dot speed multiplier. `1` = default, `2` = twice as fast. |
 | `topology`        | `Partial<FlowTopology>` | Enable/disable individual built-in connections. All default `true`. |
+| `iconStyle`       | `'default' \| 'full'` | `'full'` draws each icon large behind its value/label text. Default `'default'`. |
+| `dotShape`        | `'circle' \| 'triangle'` | `'triangle'` draws flow dots as arrowheads pointing in their direction of travel. Default `'circle'`. |
+| `curveBend`       | `number`              | Shape of the diagram's curved connections. `0` = straight lines, `1` (default) = today's curve, up to `2` = straighter departure/arrival with a sharper turn. |
 
 ### `FlowData`
 
@@ -300,6 +305,35 @@ without changing the underlying data:
 ```ts
 pf.speedScale = 0.5; // half speed — calmer animation
 pf.speedScale = 2; // twice as fast — more energetic feel
+```
+
+### `iconStyle`
+
+```ts
+pf.iconStyle = 'full'; // large, dimmed icon behind the value/label text
+pf.iconStyle = 'default'; // small icon above the text (the default)
+```
+
+### `dotShape`
+
+```ts
+pf.dotShape = 'triangle'; // small arrowheads that point in their flow direction
+pf.dotShape = 'circle'; // plain circles (the default)
+```
+
+### `curveBend`
+
+Scales the diagram's curved connections (e.g. solar/battery's fan-out to home
+and grid) by stretching or shrinking how far each curve travels in its fixed
+departure/arrival direction before turning — not by bulging the whole arc
+further from a straight line:
+
+```ts
+pf.curveBend = 0; // straightens every curve into a direct line
+pf.curveBend = 1; // today's curve (the default)
+pf.curveBend = 2; // longer straight run out of/into each node, with a
+// sharper turn in between (the maximum — kept at 2 so curves don't cross
+// neighboring nodes)
 ```
 
 ## How the flows are computed
