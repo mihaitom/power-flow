@@ -1,114 +1,27 @@
-import {
-  mdiSolarPowerVariant,
-  mdiTransmissionTower,
-  mdiHome,
-  mdiBatteryMedium,
-  mdiEvStation,
-} from '@mdi/js';
+import type {
+  FlowColors,
+  FlowLabels,
+  FlowIcons,
+  FlowTopology,
+  PowerFlowOptions,
+} from './types';
+import { DEFAULT_COLORS, DEFAULT_LABELS, DEFAULT_ICONS, DEFAULT_TOPOLOGY } from './defaults';
+import { computeFlowAllocation } from './flow-allocation';
+import { CSS, SKELETON, DOTS, DOT_CLS_TO_COLOR_VAR, trackIdFor } from './skeleton';
 
-/** Live energy readings driving the diagram. All power values are in watts. */
-export interface FlowData {
-  /** Solar / PV production (>= 0). Omit/null hides the solar node. */
-  solar?: number | null;
-  /** Grid power. Positive = importing from grid, negative = exporting. */
-  grid: number;
-  /** House consumption (>= 0). */
-  load: number;
-  /** Battery power. Positive = discharging (to house), negative = charging. Omit/null hides the battery node. */
-  battery?: number | null;
-  /** Battery state of charge in percent (0–100). */
-  batterySoc?: number | null;
-  /** Wallbox / EV charger consumption (below the house). Omit/null hides the node. */
-  wallbox?: number | null;
-  /** Second wallbox / EV charger consumption (above the house). Omit/null hides the node. */
-  wallbox2?: number | null;
-}
-
-/** Color for each node and flow direction. Any CSS color string. */
-export interface FlowColors {
-  solar: string;
-  home: string;
-  /** Grid node + dots while importing from the grid. */
-  gridIn: string;
-  /** Grid node + dots while exporting to the grid. */
-  gridOut: string;
-  /** Battery node + dots while charging (energy into the battery). */
-  batteryIn: string;
-  /** Battery node + dots while discharging (energy out of the battery). */
-  batteryOut: string;
-  wallbox: string;
-  wallbox2: string;
-}
-
-/** Text label under each node. */
-export interface FlowLabels {
-  solar: string;
-  grid: string;
-  home: string;
-  battery: string;
-  wallbox: string;
-  wallbox2: string;
-}
-
-/** SVG path string (`mdi*` from @mdi/js or any valid `<path d="">`) for each node icon. */
-export interface FlowIcons {
-  solar: string;
-  grid: string;
-  home: string;
-  battery: string;
-  wallbox: string;
-  wallbox2: string;
-}
-
-export interface PowerFlowOptions {
-  data: FlowData;
-  colors?: Partial<FlowColors>;
-  labels?: Partial<FlowLabels>;
-  icons?: Partial<FlowIcons>;
-  /** Dot speed multiplier. 1 = default, 2 = twice as fast, 0.5 = half speed. */
-  speedScale?: number;
-}
-
-const DEFAULT_COLORS: FlowColors = {
-  solar: '#fcd34d', // warm amber-yellow — sun
-  home: '#818cf8', // periwinkle — modern consumption hub
-  gridIn: '#60a5fa', // sky blue — drawing from the grid
-  gridOut: '#f472b6', // pink-magenta — feeding back to grid
-  batteryIn: '#4ade80', // lime green — charging (positive)
-  batteryOut: '#fb923c', // orange — discharging (warm energy out)
-  wallbox: '#22d3ee', // cyan — EV charger 1
-  wallbox2: '#2dd4bf', // teal — EV charger 2
-};
-
-const DEFAULT_LABELS: FlowLabels = {
-  solar: 'Solar',
-  grid: 'Grid',
-  home: 'Home',
-  battery: 'Battery',
-  wallbox: 'Wallbox',
-  wallbox2: 'Wallbox 2',
-};
-
-const DEFAULT_ICONS: FlowIcons = {
-  solar: mdiSolarPowerVariant,
-  grid: mdiTransmissionTower,
-  home: mdiHome,
-  battery: mdiBatteryMedium,
-  wallbox: mdiEvStation,
-  wallbox2: mdiEvStation,
-};
-
-const SVGNS = 'http://www.w3.org/2000/svg';
+export type {
+  FlowData,
+  FlowTopology,
+  FlowColors,
+  FlowLabels,
+  FlowIcons,
+  PowerFlowOptions,
+} from './types';
+export type { FlowAllocation } from './flow-allocation';
+export { computeFlowAllocation } from './flow-allocation';
 
 // Home arc: circumference for r=47 (inner ring of the home circle, r=52).
 const ARC_LENGTH = 2 * Math.PI * 47; // ≈ 295.31
-
-// MDI paths live in a 24×24 box. We draw native SVG paths instead of
-// foreignObject because Safari/WebKit mis-positions foreignObject inside
-// scaled SVGs. Centers the icon at (centerX, centerY) and scales it to size.
-function iconTransform(centerX: number, centerY: number, size: number): string {
-  return `translate(${centerX - size / 2} ${centerY - size / 2}) scale(${size / 24})`;
-}
 
 function formatWatts(watts: number): string {
   return Math.abs(watts) >= 1000
@@ -121,183 +34,6 @@ function tint(color: string): string {
   return `color-mix(in srgb, ${color} 15%, transparent)`;
 }
 
-// One entry per animated dot. `cls` selects the dot color via CSS; `reverse`
-// animates the dot from the path's end to its start (used to send a dot the
-// opposite way along a path that is shared by two flow directions).
-const DOTS: { id: string; cls: string; path: string; reverse?: boolean }[] = [
-  { id: 'solar-home', cls: 'solar', path: 'p-solar-home' },
-  { id: 'solar-grid', cls: 'return', path: 'p-solar-grid' },
-  { id: 'grid-home', cls: 'grid', path: 'p-grid-home' },
-  { id: 'bat-home', cls: 'battery-out', path: 'p-bat-home' },
-  { id: 'bat-grid', cls: 'return', path: 'p-bat-grid' },
-  { id: 'solar-bat', cls: 'battery-in', path: 'p-solar-bat' },
-  // Grid → battery shares the battery↔grid path, run in reverse (grid to battery).
-  { id: 'grid-bat', cls: 'battery-in', path: 'p-bat-grid', reverse: true },
-  { id: 'home-wallbox', cls: 'wallbox', path: 'p-home-wallbox' },
-  { id: 'home-wallbox2', cls: 'wallbox2', path: 'p-home-wallbox2' },
-];
-
-const CSS = `
-:host { display: block; }
-/* Fill the host box in both dimensions; preserveAspectRatio="meet" (the SVG
-   default) keeps the diagram centered and uncropped. The host gets a natural
-   aspect-ratio (set from the viewBox) so that, when no explicit height is
-   given, the height still follows the width as before. */
-.flow-svg { width: 100%; height: 100%; display: block; }
-
-.track {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1;
-  opacity: 0.15;
-}
-
-.dot {
-  stroke-width: 4;
-  transition: r 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.dot.shrunk {
-  r: 0;
-  transition: r 0.18s ease-in;
-}
-.dot.solar { fill: var(--sfd-solar); stroke: var(--sfd-solar); }
-.dot.grid { fill: var(--sfd-grid-in); stroke: var(--sfd-grid-in); }
-.dot.return { fill: var(--sfd-grid-out); stroke: var(--sfd-grid-out); }
-.dot.battery-out { fill: var(--sfd-battery-out); stroke: var(--sfd-battery-out); }
-.dot.battery-in { fill: var(--sfd-battery-in); stroke: var(--sfd-battery-in); }
-.dot.wallbox { fill: var(--sfd-wallbox); stroke: var(--sfd-wallbox); }
-.dot.wallbox2 { fill: var(--sfd-wallbox2); stroke: var(--sfd-wallbox2); }
-
-.node { transition: opacity 0.35s ease; }
-.node-bg { stroke: none; transition: fill 0.35s ease; }
-.node-ring { fill: none; stroke-width: 2.5; transition: stroke 0.35s ease; }
-.node-icon { transition: fill 0.35s ease; }
-.node.dim { opacity: 0.3; }
-
-.home-arc {
-  fill: none;
-  stroke-width: 4;
-  transition: stroke-dasharray 0.4s, stroke-dashoffset 0.4s;
-}
-.home-arc.solar-arc { stroke: var(--sfd-solar); }
-/* The battery arcs show the battery feeding the home / an export — discharging. */
-.home-arc.bat-arc { stroke: var(--sfd-battery-out); }
-.home-arc.grid-arc { stroke: var(--sfd-grid-in); }
-
-.val-text { font-size: 14px; text-anchor: middle; fill: currentColor; font-weight: 700; }
-.lbl-text {
-  font-size: 11px;
-  text-anchor: middle;
-  fill: currentColor;
-  opacity: 0.55;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-}
-`;
-
-// Static SVG skeleton. Every node, track and dot is present from the start;
-// topology (battery/wallbox) is toggled via `display`, so path lengths only
-// have to be measured once and SMIL animations never restart on toggle.
-//
-// Diagonal paths fan out at the grid/home side by ±12 (y=173/197), mirroring
-// the fan-out at the solar/battery side (x=188/212).
-const SKELETON = `
-<svg class="flow-svg" xmlns="${SVGNS}">
-  <defs>
-    <path id="p-solar-home" d="M212,112 C212,150 256,173 294,173" />
-    <path id="p-solar-grid" d="M188,112 C188,150 144,173 106,173" />
-    <path id="p-grid-home" d="M107,185 H293" />
-    <path id="p-bat-home" d="M212,258 C212,220 256,197 294,197" />
-    <path id="p-bat-grid" d="M188,258 C188,220 144,197 106,197" />
-    <path id="p-solar-bat" d="M200,112 V258" />
-    <path id="p-home-wallbox" d="M345,237 V258" />
-    <path id="p-home-wallbox2" d="M345,133 V112" />
-  </defs>
-
-  <use href="#p-solar-home" class="track" data-topo="solar" />
-  <use href="#p-solar-grid" class="track" data-topo="solar" />
-  <use href="#p-grid-home" class="track" />
-  <use href="#p-bat-home" class="track" data-topo="battery" />
-  <use href="#p-bat-grid" class="track" data-topo="battery" />
-  <use href="#p-solar-bat" class="track" data-topo="solar-bat" />
-  <use href="#p-home-wallbox" class="track" data-topo="wallbox" />
-  <use href="#p-home-wallbox2" class="track" data-topo="wallbox2" />
-
-  ${DOTS.map(
-    (d) =>
-      `<circle id="dot-${d.id}" r="2" class="dot ${d.cls}" vector-effect="non-scaling-stroke" />`,
-  ).join('\n  ')}
-
-  <!-- Coverage rings, drawn under the node bodies. The home ring shows how
-       the load is sourced (solar/battery/grid); the grid ring shows how an
-       export is sourced (solar/battery). In their own group so the solar
-       node's "dim" state can't fade them. -->
-  <g>
-    <circle id="arc-solar" cx="345" cy="185" r="47" class="home-arc solar-arc" transform="rotate(-90 345 185)" />
-    <circle id="arc-bat" cx="345" cy="185" r="47" class="home-arc bat-arc" transform="rotate(-90 345 185)" />
-    <circle id="arc-grid" cx="345" cy="185" r="47" class="home-arc grid-arc" transform="rotate(-90 345 185)" />
-    <circle id="garc-solar" cx="55" cy="185" r="47" class="home-arc solar-arc" transform="rotate(-90 55 185)" />
-    <circle id="garc-bat" cx="55" cy="185" r="47" class="home-arc bat-arc" transform="rotate(-90 55 185)" />
-  </g>
-
-  <!-- ── Solar (top, optional) ── -->
-  <g id="n-solar" class="node" data-topo="solar">
-    <circle cx="200" cy="60" r="52" class="node-bg" id="solar-bg" />
-    <circle cx="200" cy="60" r="52" class="node-ring" id="solar-ring" />
-    <path id="solar-icon" class="node-icon" transform="${iconTransform(200, 42, 28)}" d="${mdiSolarPowerVariant}" />
-    <text x="200" y="76" class="val-text" id="t-solar-val"></text>
-    <text x="200" y="89" class="lbl-text" id="t-solar-lbl"></text>
-  </g>
-
-  <!-- ── Grid (left) ── -->
-  <g class="node">
-    <circle cx="55" cy="185" r="52" class="node-bg" id="grid-bg" />
-    <circle cx="55" cy="185" r="52" class="node-ring" id="grid-ring" />
-    <path id="grid-icon" class="node-icon" transform="${iconTransform(55, 167, 28)}" d="${mdiTransmissionTower}" />
-    <text x="55" y="201" class="val-text" id="t-grid-val"></text>
-    <text x="55" y="214" class="lbl-text" id="t-grid-lbl"></text>
-  </g>
-
-  <!-- ── Home (right) ── -->
-  <g class="node">
-    <circle cx="345" cy="185" r="52" class="node-bg" id="home-bg" />
-    <circle cx="345" cy="185" r="52" class="node-ring" id="home-ring" />
-    <path id="home-icon" class="node-icon" transform="${iconTransform(345, 167, 28)}" d="${mdiHome}" />
-    <text x="345" y="201" class="val-text" id="t-home-val"></text>
-    <text x="345" y="214" class="lbl-text" id="t-home-lbl"></text>
-  </g>
-
-  <!-- ── Wallbox 2 (above the house, optional) ── -->
-  <g id="n-wallbox2" class="node" data-topo="wallbox2">
-    <circle cx="345" cy="60" r="52" class="node-bg" id="wb2-bg" />
-    <circle cx="345" cy="60" r="52" class="node-ring" id="wb2-ring" />
-    <path id="wb2-icon" class="node-icon" transform="${iconTransform(345, 42, 28)}" d="${mdiEvStation}" />
-    <text x="345" y="76" class="val-text" id="t-wb2-val"></text>
-    <text x="345" y="89" class="lbl-text" id="t-wb2-lbl"></text>
-  </g>
-
-  <!-- ── Battery (bottom, optional) ── -->
-  <g id="n-battery" class="node" data-topo="battery">
-    <circle cx="200" cy="310" r="52" class="node-bg" id="bat-bg" />
-    <circle id="bat-soc-arc" cx="200" cy="310" r="47" class="home-arc" transform="rotate(-90 200 310)" />
-    <circle cx="200" cy="310" r="52" class="node-ring" id="bat-ring" />
-    <path id="bat-icon" class="node-icon" transform="${iconTransform(200, 283, 28)}" d="${mdiBatteryMedium}" />
-    <text x="200" y="315" class="val-text" id="t-bat-soc"></text>
-    <text x="200" y="328" class="val-text" id="t-bat-watts" style="font-size: 11px; opacity: 0.75"></text>
-    <text x="200" y="341" class="lbl-text" id="t-bat-lbl"></text>
-  </g>
-
-  <!-- ── Wallbox (below the house, optional) ── -->
-  <g id="n-wallbox" class="node" data-topo="wallbox">
-    <circle cx="345" cy="310" r="52" class="node-bg" id="wb-bg" />
-    <circle cx="345" cy="310" r="52" class="node-ring" id="wb-ring" />
-    <path id="wb-icon" class="node-icon" transform="${iconTransform(345, 290, 28)}" d="${mdiEvStation}" />
-    <text x="345" y="328" class="val-text" id="t-wb-val"></text>
-    <text x="345" y="341" class="lbl-text" id="t-wb-lbl"></text>
-  </g>
-</svg>
-`;
-
 /**
  * Framework-agnostic renderer for the energy-flow diagram. Renders into a
  * shadow root attached to the given host element, so its styles never leak.
@@ -309,6 +45,7 @@ export class PowerFlow {
   private colors: FlowColors = DEFAULT_COLORS;
   private labels: FlowLabels = DEFAULT_LABELS;
   private icons: FlowIcons = { ...DEFAULT_ICONS };
+  private topology: FlowTopology = DEFAULT_TOPOLOGY;
   private speedScale = 1;
 
   // Per-dot animation state. We drive the dots ourselves (requestAnimationFrame)
@@ -406,14 +143,20 @@ export class PowerFlow {
     if (options.speedScale !== undefined) {
       this.speedScale = options.speedScale;
     }
-    const { colors, labels, icons } = this;
+    if (options.topology !== undefined) {
+      this.topology = { ...DEFAULT_TOPOLOGY, ...options.topology };
+    }
+    const { colors, labels, icons, topology: topo } = this;
 
     this.setIconPath('solar-icon', icons.solar);
     this.setIconPath('grid-icon', icons.grid);
     this.setIconPath('home-icon', icons.home);
     this.setIconPath('bat-icon', icons.battery);
     this.setIconPath('wb-icon', icons.wallbox);
+    this.setIconPath('wb4-icon', icons.wallbox);
     this.setIconPath('wb2-icon', icons.wallbox2);
+    this.setIconPath('bl-icon', icons.batteryLoad);
+    this.setIconPath('bl2-icon', icons.batteryLoad2);
 
     const solarWatts = data.solar ?? 0;
     const gridWatts = data.grid ?? 0;
@@ -421,83 +164,93 @@ export class PowerFlow {
     const batteryWatts = data.battery ?? 0;
     const wallboxWatts = data.wallbox ?? 0;
     const wallbox2Watts = data.wallbox2 ?? 0;
+    const batteryLoadWatts = data.batteryLoad ?? 0;
+    const batteryLoad2Watts = data.batteryLoad2 ?? 0;
     const hasSolar = data.solar != null;
     const hasBattery = data.battery != null;
     const hasWallbox = data.wallbox != null;
     const hasWallbox2 = data.wallbox2 != null;
+    const hasBatteryLoad = data.batteryLoad != null;
+    const hasBatteryLoad2 = data.batteryLoad2 != null;
 
     // ── Flow allocation ──────────────────────────────────────────────
-    // Each source (solar, battery, grid) is split across the sinks it feeds,
-    // by priority, so every leg carries the power actually on it — the dot
-    // speeds and home arcs stay mutually consistent and never double-count a
-    // shared meter (e.g. one export split between solar and battery). Matches
-    // the convention of Home Assistant's power-flow-card-plus.
-    //
-    //   1. A charging battery is fed from solar first (the rest from the grid),
-    //   2. remaining solar serves the house, then exports;
-    //   3. a discharging battery covers the house's remaining demand, then
-    //      exports;
-    //   4. the grid covers whatever the house still needs.
-    //
-    // Charging the battery before serving the house is what makes the tricky
-    // case work — e.g. solar 1000, load 1000, battery charging 100, grid +100:
-    // solar→battery 100, solar→home 900, grid→home 100 (not a lone solar→home).
-    //
-    // `load` is the total house consumption; the wallbox is a sub-consumer of
-    // it (drawn as a separate leg), not an extra load on top.
-    const solarP = Math.max(solarWatts, 0);
+    // See `computeFlowAllocation` for the full priority rationale (also
+    // covered in the README's "How the flows are computed" section) and its
+    // unit tests in flow-allocation.test.ts for the specific tricky cases it
+    // handles.
+    const {
+      solarToBattery,
+      gridToBattery,
+      solarToHome,
+      solarToGrid,
+      batToHome,
+      batToGrid,
+      gridToHome,
+    } = computeFlowAllocation(data, topo);
     const load = Math.max(loadWatts, 0);
-    const batteryDischarge = Math.max(batteryWatts, 0);
-    const batteryCharge = Math.max(-batteryWatts, 0);
-
-    const solarToBattery = Math.min(batteryCharge, solarP);
-    // Whatever the battery still needs to charge comes from the grid; it shares
-    // the battery↔grid path, drawn in reverse (grid → battery).
-    const gridToBattery = batteryCharge - solarToBattery;
-
-    const solarLeft = solarP - solarToBattery;
-    const solarToHome = Math.min(solarLeft, load);
-    const solarToGrid = solarLeft - solarToHome;
-
-    const homeRemaining = load - solarToHome;
-    const batToHome = Math.min(batteryDischarge, homeRemaining);
-    const batToGrid = batteryDischarge - batToHome;
-
-    const gridToHome = homeRemaining - batToHome;
 
     // ViewBox: include the top row (solar / wallbox 2, edge y=8) and/or the
-    // bottom row (battery / wallbox, edge y=362) only when something occupies
-    // it, with an 8px margin. Absent rows are trimmed so the diagram never has
-    // a large empty band — e.g. grid+home+battery starts at the middle row.
+    // bottom row (battery / wallbox / batteryLoad / batteryLoad2, edge y=362)
+    // only when something occupies it, with an 8px margin. Absent rows are
+    // trimmed so the diagram never has a large empty band — e.g.
+    // grid+home+battery starts at the middle row.
+    //
+    // batteryLoad and batteryLoad2 always have a permanent slot in the
+    // bottom row — never a new row. If wallbox would otherwise collide with
+    // batteryLoad2's slot (345,310), wallbox moves to a 4th column (490,310)
+    // instead, widening the viewBox rather than heightening it.
     const hasTop = hasSolar || hasWallbox2;
     const hasBottom = hasBattery || hasWallbox;
+    const wallboxNeedsColumn4 = hasWallbox && hasBattery && hasBatteryLoad2;
     const minY = hasTop ? 0 : 125; // middle row (cy 185, edge 133) − 8 margin
-    const maxY = hasBottom ? 370 : 245; // battery edge 362 / home edge 237 + 8
+    const maxY = hasBottom ? 370 : 245; // battery edge 362 + 8 / home edge 237 + 8
+    const width = wallboxNeedsColumn4 ? 545 : 400; // 4th column edge 542 (490+52) + 3, matching the existing 400 = 397 (345+52) + 3
     const height = maxY - minY;
-    this.svg.setAttribute('viewBox', `0 ${minY} 400 ${height}`);
+    this.svg.setAttribute('viewBox', `0 ${minY} ${width} ${height}`);
 
     // Give the host a natural aspect-ratio matching the current viewBox. When
     // the consumer sets an explicit height (e.g. a resizable container), that
     // wins and the diagram fits inside it; otherwise the height follows width.
-    (this.root.host as HTMLElement).style.aspectRatio = `400 / ${height}`;
+    (this.root.host as HTMLElement).style.aspectRatio = `${width} / ${height}`;
 
-    // Expose colors to the CSS (dots and arcs) as custom properties.
+    // Expose colors to the CSS (dots, tracks and arcs) as custom properties.
+    // gridOut/batteryIn aren't included — every dot/track is colored by its
+    // source (see DOTS), and those two colors are only ever used for the
+    // grid/battery nodes' own import/export and charge/discharge styling.
     const style = this.svg.style;
     style.setProperty('--sfd-solar', colors.solar);
     style.setProperty('--sfd-grid-in', colors.gridIn);
-    style.setProperty('--sfd-grid-out', colors.gridOut);
-    style.setProperty('--sfd-battery-in', colors.batteryIn);
     style.setProperty('--sfd-battery-out', colors.batteryOut);
     style.setProperty('--sfd-wallbox', colors.wallbox);
     style.setProperty('--sfd-wallbox2', colors.wallbox2);
+    style.setProperty('--sfd-battery-load', colors.batteryLoad);
+    style.setProperty('--sfd-battery-load2', colors.batteryLoad2);
 
-    // Topology: show/hide the optional nodes and their tracks (each tagged with
-    // a matching data-topo attribute). The solar↔battery track needs both nodes.
+    // Topology: show/hide the optional nodes (each tagged with a matching
+    // data-topo attribute).
     this.setTopo('solar', hasSolar);
     this.setTopo('battery', hasBattery);
-    this.setTopo('wallbox', hasWallbox);
+    // batteryLoad/batteryLoad2 are sub-consumers of the battery's discharge,
+    // so they're meaningless (and hidden) without a battery, even if a
+    // caller sets a batteryLoad value without a battery value.
+    this.setTopo('batteryLoad', hasBattery && hasBatteryLoad);
+    this.setTopo('batteryLoad2', hasBattery && hasBatteryLoad2);
+    // Wallbox normally sits at (345,310); it yields that slot to batteryLoad2
+    // and moves to a 4th column instead when both are active.
+    this.setTopo('wallbox', hasWallbox && !wallboxNeedsColumn4);
+    this.setTopo('wallbox4', wallboxNeedsColumn4);
     this.setTopo('wallbox2', hasWallbox2);
-    this.setTopo('solar-bat', hasSolar && hasBattery);
+
+    // Edges: the five built-in connections gated by FlowTopology combine node
+    // presence with the matching topology flag.
+    this.setEdge('use-solar-home', hasSolar && topo.solarToHome);
+    this.setEdge('use-solar-grid', hasSolar && topo.solarToGrid);
+    this.setEdge(
+      'use-solar-bat',
+      hasSolar && hasBattery && topo.solarToBattery,
+    );
+    this.setEdge('use-bat-home', hasBattery && topo.batteryToHome);
+    this.setEdge('use-bat-grid', hasBattery && topo.batteryToGrid);
 
     // ── Dots ──
     this.setDot('solar-home', solarToHome > 0, solarToHome);
@@ -507,12 +260,53 @@ export class PowerFlow {
     this.setDot('bat-grid', hasBattery && batToGrid > 0, batToGrid);
     this.setDot('solar-bat', hasBattery && solarToBattery > 0, solarToBattery);
     this.setDot('grid-bat', hasBattery && gridToBattery > 0, gridToBattery);
-    this.setDot('home-wallbox', hasWallbox && wallboxWatts > 0, wallboxWatts);
+    this.setDot(
+      'home-wallbox',
+      hasWallbox && !wallboxNeedsColumn4 && wallboxWatts > 0,
+      wallboxWatts,
+    );
+    this.setDot(
+      'home-wallbox4',
+      wallboxNeedsColumn4 && wallboxWatts > 0,
+      wallboxWatts,
+    );
     this.setDot(
       'home-wallbox2',
       hasWallbox2 && wallbox2Watts > 0,
       wallbox2Watts,
     );
+    this.setDot(
+      'bat-batteryload',
+      hasBattery && hasBatteryLoad && batteryLoadWatts > 0,
+      batteryLoadWatts,
+    );
+    this.setDot(
+      'bat-batteryload2',
+      hasBattery && hasBatteryLoad2 && batteryLoad2Watts > 0,
+      batteryLoad2Watts,
+    );
+
+    // ── Track coloring ── Highlight each track in the color of the dot
+    // currently traveling along it, once `setDot` above has updated
+    // `this.dots[*].visible`. A handful of tracks (e.g. battery↔grid) are
+    // shared by two dots that travel in opposite directions — they're always
+    // mutually exclusive (never both carry flow at once), so aggregating "is
+    // any dot on this track visible" per track, rather than per dot, avoids
+    // one dot's `setDot` call clobbering the state the other just set.
+    const trackActive: Record<string, string | null> = {};
+    for (const d of DOTS) {
+      const id = trackIdFor(d.path);
+      const dotState = this.dots[d.id];
+      if (dotState.visible) trackActive[id] = DOT_CLS_TO_COLOR_VAR[d.cls] ?? d.cls;
+      else if (!(id in trackActive)) trackActive[id] = null;
+    }
+    for (const id in trackActive) {
+      const colorVar = trackActive[id];
+      const el = this.el[id] as SVGElement | undefined;
+      if (!el) continue;
+      el.classList.toggle('active', colorVar !== null);
+      if (colorVar) el.style.setProperty('--track-color', `var(--sfd-${colorVar})`);
+    }
 
     // ── Solar node ──
     if (hasSolar) {
@@ -521,7 +315,7 @@ export class PowerFlow {
       this.stroke('solar-ring', colors.solar);
       this.fill('solar-icon', colors.solar);
       this.text('t-solar-val', formatWatts(solarWatts));
-      this.text('t-solar-lbl', labels.solar);
+      this.labelText('t-solar-lbl', labels.solar);
     }
 
     // Home arc: the fraction of the house load covered by solar, battery and
@@ -549,14 +343,14 @@ export class PowerFlow {
     const gridVal = this.el['t-grid-val'] as SVGTextElement;
     gridVal.style.fill = gridColor;
     gridVal.textContent = `${gridWatts >= 0 ? '→' : '←'} ${formatWatts(Math.abs(gridWatts))}`;
-    this.text('t-grid-lbl', labels.grid);
+    this.labelText('t-grid-lbl', labels.grid);
 
     // ── Home node ──
     this.fill('home-bg', tint(colors.home));
     this.stroke('home-ring', colors.home);
     this.fill('home-icon', colors.home);
     this.text('t-home-val', formatWatts(loadWatts));
-    this.text('t-home-lbl', labels.home);
+    this.labelText('t-home-lbl', labels.home);
 
     // ── Battery node ── (colour follows charge/discharge, like the grid node)
     if (hasBattery) {
@@ -572,7 +366,7 @@ export class PowerFlow {
       const watts = this.el['t-bat-watts'] as SVGTextElement;
       watts.style.fill = batteryColor;
       watts.textContent = `${batteryWatts >= 0 ? '↑' : '↓'} ${formatWatts(Math.abs(batteryWatts))}`;
-      this.text('t-bat-lbl', labels.battery);
+      this.labelText('t-bat-lbl', labels.battery);
       // SoC inner ring — progress arc from 12 o'clock clockwise.
       const socArc = this.el['bat-soc-arc'] as SVGCircleElement;
       socArc.style.stroke = batteryColor;
@@ -583,14 +377,22 @@ export class PowerFlow {
       socArc.style.strokeDasharray = `${pct * ARC_LENGTH} ${ARC_LENGTH}`;
     }
 
-    // ── Wallbox node (below the house) ──
+    // ── Wallbox node — render both static variants (default + 4th-column
+    // fallback); setTopo above decides which one is actually visible. ──
     if (hasWallbox) {
       this.el['n-wallbox'].classList.toggle('dim', wallboxWatts === 0);
       this.fill('wb-bg', tint(colors.wallbox));
       this.stroke('wb-ring', colors.wallbox);
       this.fill('wb-icon', colors.wallbox);
       this.text('t-wb-val', formatWatts(wallboxWatts));
-      this.text('t-wb-lbl', labels.wallbox);
+      this.labelText('t-wb-lbl', labels.wallbox);
+
+      this.el['n-wallbox4'].classList.toggle('dim', wallboxWatts === 0);
+      this.fill('wb4-bg', tint(colors.wallbox));
+      this.stroke('wb4-ring', colors.wallbox);
+      this.fill('wb4-icon', colors.wallbox);
+      this.text('t-wb4-val', formatWatts(wallboxWatts));
+      this.labelText('t-wb4-lbl', labels.wallbox);
     }
 
     // ── Wallbox 2 node (above the house) ──
@@ -600,7 +402,30 @@ export class PowerFlow {
       this.stroke('wb2-ring', colors.wallbox2);
       this.fill('wb2-icon', colors.wallbox2);
       this.text('t-wb2-val', formatWatts(wallbox2Watts));
-      this.text('t-wb2-lbl', labels.wallbox2);
+      this.labelText('t-wb2-lbl', labels.wallbox2);
+    }
+
+    // ── Battery load 1 node ──
+    if (hasBatteryLoad) {
+      this.el['n-batteryload'].classList.toggle('dim', batteryLoadWatts === 0);
+      this.fill('bl-bg', tint(colors.batteryLoad));
+      this.stroke('bl-ring', colors.batteryLoad);
+      this.fill('bl-icon', colors.batteryLoad);
+      this.text('t-bl-val', formatWatts(batteryLoadWatts));
+      this.labelText('t-bl-lbl', labels.batteryLoad);
+    }
+
+    // ── Battery load 2 node ──
+    if (hasBatteryLoad2) {
+      this.el['n-batteryload2'].classList.toggle(
+        'dim',
+        batteryLoad2Watts === 0,
+      );
+      this.fill('bl2-bg', tint(colors.batteryLoad2));
+      this.stroke('bl2-ring', colors.batteryLoad2);
+      this.fill('bl2-icon', colors.batteryLoad2);
+      this.text('t-bl2-val', formatWatts(batteryLoad2Watts));
+      this.labelText('t-bl2-lbl', labels.batteryLoad2);
     }
   }
 
@@ -617,12 +442,22 @@ export class PowerFlow {
 
   // ── helpers ──
 
-  // Show/hide every element belonging to an optional node (its node group and
-  // its tracks share the same data-topo key).
+  // Show/hide every element belonging to an optional node (its node group and,
+  // for wallbox/wallbox2/batteryLoad/batteryLoad2, its non-configurable track
+  // share the same data-topo key).
   private setTopo(key: string, visible: boolean) {
     this.svg
       .querySelectorAll<SVGElement>(`[data-topo="${key}"]`)
       .forEach((n) => (n.style.display = visible ? '' : 'none'));
+  }
+
+  // Show/hide a single configurable-topology track by id (combines node
+  // presence and the matching FlowTopology flag — see `update()`).
+  private setEdge(id: string, visible: boolean) {
+    (this.el[id] as SVGElement | undefined)?.style.setProperty(
+      'display',
+      visible ? '' : 'none',
+    );
   }
 
   private fill(id: string, color: string) {
@@ -636,6 +471,34 @@ export class PowerFlow {
   private text(id: string, value: string) {
     const node = this.el[id];
     if (node) node.textContent = value;
+  }
+
+  // Node labels are arbitrary caller-supplied strings (e.g. a custom
+  // appliance name), unlike the fixed-format value text — so unlike `text()`
+  // above, this squeezes the text horizontally (SVG `textLength` +
+  // `lengthAdjust="spacingAndGlyphs"`) if it would otherwise run past the
+  // node's circle. Short strings skip the check entirely (cheap, since
+  // `getComputedTextLength()` forces a layout reflow) — LABEL_SAFE_CHARS is a
+  // conservative "definitely fits" bound; anything longer (including the
+  // built-in "Battery Load"/"Battery Load 2") is actually measured.
+  private static readonly LABEL_SAFE_CHARS = 10;
+  private static readonly LABEL_MAX_WIDTH = 92; // node circles are 104 wide (r=52)
+  private labelText(id: string, value: string) {
+    const node = this.el[id] as SVGTextElement | undefined;
+    if (!node) return;
+    node.textContent = value;
+    // getComputedTextLength() reflects any textLength constraint already on
+    // the element, so a previously-compressed label would otherwise measure
+    // as exactly LABEL_MAX_WIDTH forever after (never re-triggering
+    // compression, since it's not > the budget) — clear both attributes
+    // first so every measurement is against the natural, unconstrained width.
+    node.removeAttribute('textLength');
+    node.removeAttribute('lengthAdjust');
+    if (value.length <= PowerFlow.LABEL_SAFE_CHARS) return;
+    if (node.getComputedTextLength() > PowerFlow.LABEL_MAX_WIDTH) {
+      node.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+      node.setAttribute('textLength', String(PowerFlow.LABEL_MAX_WIDTH));
+    }
   }
 
   private setIconPath(id: string, path: string) {

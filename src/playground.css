@@ -192,16 +192,30 @@ input[type='range'] {
   gap: 6px;
   margin-top: 8px;
 }
-#testcases,
 #action-buttons {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 6px;
   margin-top: 8px;
 }
-#testcases button:last-child:nth-child(odd),
 #action-buttons button:last-child:nth-child(even) {
   grid-column: 1 / -1;
+}
+#testcases .row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-top: 0;
+  margin-bottom: 14px;
+}
+#testcases .row button:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+#testcases .tc-category {
+  margin-bottom: 6px;
+}
+#testcases .tc-category:not(:first-child) {
+  margin-top: 4px;
 }
 #get-code {
   grid-column: 1 / -1;

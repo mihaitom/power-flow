@@ -28,10 +28,17 @@ It ships as a `<power-flow>` **Web Component**, so it works natively in **React,
 Angular, Vue, Svelte or plain HTML** — plus a tiny vanilla API. No canvas, just
 crisp scalable vectors; no runtime framework dependency.
 
-- **Optional nodes** — solar, battery and both wallboxes appear automatically
-  when you pass their values; empty rows are trimmed so there's no dead space.
+- **Optional nodes** — solar, battery, both wallboxes and both battery-fed
+  direct loads appear automatically when you pass their values; empty rows are
+  trimmed so there's no dead space.
+- **Configurable topology** — disable individual built-in connections (e.g. a
+  PV source wired only to the battery, never to the house/grid) via
+  `topology`, without touching anything else.
 - **Power-proportional animation** — dot speed scales with watts and stays
   smooth (no jumping) as values update live.
+- **Active-leg highlighting** — the thin track a dot travels on lights up in
+  the dot's own color while it's carrying power, fading back to a dim outline
+  once the flow stops.
 - **Consistent flow math** — each source is split across its sinks with no
   double-counting, modelled after Home Assistant's
   [power-flow-card-plus](https://github.com/flixlix/power-flow-card-plus).
@@ -155,6 +162,7 @@ leak into your app.
 | `labels`          | `Partial<FlowLabels>` | Override node labels (i18n).                              |
 | `icons`           | `Partial<FlowIcons>`  | Override node icons (any SVG `<path d="">` string).       |
 | `speedScale`      | `number`              | Dot speed multiplier. `1` = default, `2` = twice as fast. |
+| `topology`        | `Partial<FlowTopology>` | Enable/disable individual built-in connections. All default `true`. |
 
 ### `FlowData`
 
@@ -167,11 +175,49 @@ leak into your app.
 | `batterySoc` | `number \| null` | Battery state of charge in percent. Optional.            |
 | `wallbox`    | `number \| null` | EV charger consumption, drawn below the house. Optional. |
 | `wallbox2`   | `number \| null` | Second EV charger, drawn above the house. Optional.      |
+| `batteryLoad`  | `number \| null` | Load fed directly from a battery output port, bypassing the house (e.g. an AC unit wired straight to the battery). Optional. |
+| `batteryLoad2` | `number \| null` | Second battery-fed direct load, same as `batteryLoad`. Optional. |
 
 > Only `grid` and `load` are required. Omitting (or passing `null` for) `solar`
-> / `battery` / `wallbox` / `wallbox2` hides that node, and the diagram trims
-> the now-empty row so there's no dead space. Both wallboxes are sub-consumers
-> of `load`, not extra load on top of it.
+> / `battery` / `wallbox` / `wallbox2` / `batteryLoad` / `batteryLoad2` hides
+> that node, and the diagram trims the now-empty row so there's no dead space.
+> Both wallboxes are sub-consumers of `load`, not extra load on top of it.
+> Likewise, `batteryLoad` and `batteryLoad2` are sub-consumers of `battery`'s
+> discharge — already included in it, drawn as a separate leg, not extra
+> discharge on top. `batteryLoad`/`batteryLoad2` only render when `battery` is
+> also set.
+
+### `FlowTopology`
+
+Some installations don't have every connection the default layout assumes —
+e.g. a balcony/plug-in PV system wired so it can only ever charge the battery,
+never feed the house or grid directly. `topology` lets you disable individual
+built-in connections; everything defaults to `true` (today's behavior), so
+existing configs are unaffected:
+
+```ts
+pf.topology = {
+  solarToHome: true,
+  solarToGrid: true,
+  solarToBattery: true,
+  batteryToHome: true,
+  batteryToGrid: true,
+};
+```
+
+A disabled connection's power is simply not drawn further (curtailed) rather
+than rerouted — e.g. with `solarToHome`/`solarToGrid` both `false`, any solar
+production left over after charging the battery just isn't shown going
+anywhere else. `battery` ↔ `grid` is a single shared physical path in both
+directions, so `batteryToGrid: false` also hides the grid → battery charging
+dot.
+
+Balcony-PV example — a PV source with no direct link to the house/grid:
+
+```ts
+pf.data = { solar: 600, grid: 200, load: 900, battery: -300 };
+pf.topology = { solarToHome: false, solarToGrid: false };
+```
 
 ### `colors`
 
@@ -185,6 +231,8 @@ leak into your app.
   batteryOut: "#fb923c", // orange    — discharging
   wallbox:    "#22d3ee", // cyan
   wallbox2:   "#2dd4bf", // teal
+  batteryLoad:  "#a78bfa", // violet — battery-fed direct load 1
+  batteryLoad2: "#c084fc", // purple — battery-fed direct load 2
 }
 ```
 
@@ -205,7 +253,7 @@ import { mdiSolarPanel, mdiFlash } from '@mdi/js';
 pf.icons = {
   solar: mdiSolarPanel, // swap the default solar-power-variant icon
   grid: mdiFlash, // swap the transmission tower
-  // home / battery / wallbox / wallbox2 — all optional
+  // home / battery / wallbox / wallbox2 / batteryLoad / batteryLoad2 — all optional
 };
 ```
 
@@ -226,10 +274,24 @@ Meters only tell you the net at each node, so `powerflow` decomposes them into
 the individual legs by priority — every source is split across the sinks it
 feeds, with nothing double-counted:
 
-1. a **charging battery** is fed from solar first (the rest from the grid),
-2. remaining **solar** serves the house, then exports,
-3. a **discharging battery** covers the house's remaining demand, then exports,
-4. the **grid** covers whatever the house still needs.
+1. `batteryLoad`/`batteryLoad2` (direct loads on the battery, not the house)
+   are folded into the battery's charge/discharge need first — since
+   `battery` is only ever a single net reading, a direct load pulls that
+   reading toward discharge, so more gross charging may actually be needed
+   than the net figure alone suggests (e.g. a battery netting −100 W while
+   also feeding 1150 W of direct loads needs 1250 W of gross charge in, not
+   100 W),
+2. a **charging battery** is fed from solar first (the rest from the grid),
+3. remaining **solar** serves the house, then exports,
+4. any **battery discharge** left over after step 1 covers the house's
+   remaining demand, then exports,
+5. the **grid** covers whatever the house still needs.
+
+Each of these legs additionally honours `topology`: a disabled connection is
+forced to zero and whatever power it would have carried is not drawn on that
+leg. It isn't simply discarded, though — e.g. if solar's only enabled route
+is the battery, all of it is pushed in, and any excess beyond what's needed
+is reconstructed as extra battery discharge rather than vanishing.
 
 This matches the convention of
 [power-flow-card-plus](https://github.com/flixlix/power-flow-card-plus), so e.g.
@@ -242,6 +304,8 @@ line.
 ```bash
 npm install
 npm run dev           # playground at localhost:5173 — sliders, test cases, simulate day
+npm test               # unit tests (vitest) for the flow-allocation math
+npm run test:watch     # same, in watch mode
 
 npm run build         # build:lib + build:site
 npm run build:lib     # → dist/      publishable library (JS bundles + .d.ts)

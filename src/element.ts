@@ -1,5 +1,11 @@
 import { PowerFlow } from './core';
-import type { FlowData, FlowColors, FlowLabels, FlowIcons } from './core';
+import type {
+  FlowData,
+  FlowColors,
+  FlowLabels,
+  FlowIcons,
+  FlowTopology,
+} from './types';
 
 /**
  * `<power-flow>` custom element — a framework-agnostic energy-flow diagram.
@@ -26,6 +32,7 @@ export class PowerFlowElement extends HTMLElement {
   private _labels: Partial<FlowLabels> | undefined;
   private _icons: Partial<FlowIcons> | undefined;
   private _speedScale: number | undefined;
+  private _topology: Partial<FlowTopology> | undefined;
 
   set data(value: FlowData) {
     this._data = value;
@@ -67,6 +74,14 @@ export class PowerFlowElement extends HTMLElement {
     return this._speedScale;
   }
 
+  set topology(value: Partial<FlowTopology> | undefined) {
+    this._topology = value;
+    this.render();
+  }
+  get topology(): Partial<FlowTopology> | undefined {
+    return this._topology;
+  }
+
   connectedCallback() {
     this.render();
   }
@@ -101,6 +116,7 @@ export class PowerFlowElement extends HTMLElement {
       labels: this._labels,
       icons: this._icons,
       speedScale: this._speedScale,
+      topology: this._topology,
     };
     if (this.pf) {
       this.pf.update(options);

@@ -34,7 +34,7 @@
         <div id="action-buttons">
           <button id="get-code">Get code</button>
           <button id="simulate">▶ Simulate day</button>
-          <button id="languageBtn">Toggle labels (DE)</button>
+          <button id="shuffle-appliances">Shuffle appliances</button>
           <button id="shuffle-icons">Shuffle icons</button>
           <button id="reset-icons">Reset icons</button>
           <button id="reset-colors">Reset colors</button>
@@ -82,6 +82,14 @@
           /></label>
           <label
             >Wallbox 2 <input type="color" id="c-wallbox2" value="#2dd4bf"
+          /></label>
+          <label
+            >Battery load
+            <input type="color" id="c-batteryLoad" value="#a78bfa"
+          /></label>
+          <label
+            >Battery load 2
+            <input type="color" id="c-batteryLoad2" value="#c084fc"
           /></label>
         </div>
 
@@ -184,8 +192,66 @@
 
         <hr />
 
+        <label class="toggle">
+          <input id="has-batteryLoad" type="checkbox" /> Battery load (direct
+          port)
+        </label>
+        <div class="ctrl" id="batteryLoad-ctrls">
+          <label>Battery load <span class="v" id="v-batteryLoad"></span></label>
+          <input
+            id="batteryLoad"
+            type="range"
+            min="0"
+            max="3000"
+            step="50"
+            value="800"
+          />
+        </div>
+
+        <label class="toggle">
+          <input id="has-batteryLoad2" type="checkbox" /> Battery load 2
+          (direct port)
+        </label>
+        <div class="ctrl" id="batteryLoad2-ctrls">
+          <label
+            >Battery load 2 <span class="v" id="v-batteryLoad2"></span
+          ></label>
+          <input
+            id="batteryLoad2"
+            type="range"
+            min="0"
+            max="3000"
+            step="50"
+            value="1200"
+          />
+        </div>
+
+        <hr />
+
+        <div class="section-title">Topology (built-in connections)</div>
+        <label class="toggle">
+          <input id="topo-solarToHome" type="checkbox" checked /> Solar → home
+        </label>
+        <label class="toggle">
+          <input id="topo-solarToGrid" type="checkbox" checked /> Solar → grid
+        </label>
+        <label class="toggle">
+          <input id="topo-solarToBattery" type="checkbox" checked /> Solar →
+          battery
+        </label>
+        <label class="toggle">
+          <input id="topo-batteryToHome" type="checkbox" checked /> Battery →
+          home
+        </label>
+        <label class="toggle">
+          <input id="topo-batteryToGrid" type="checkbox" checked /> Battery →
+          grid
+        </label>
+
+        <hr />
+
         <div class="section-title">Test cases</div>
-        <div class="row" id="testcases"></div>
+        <div id="testcases"></div>
       </div>
 
       <div class="card diagram-card resize">

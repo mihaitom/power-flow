@@ -6,8 +6,9 @@ export type {
   FlowColors,
   FlowLabels,
   FlowIcons,
+  FlowTopology,
   PowerFlowOptions,
-} from './core';
+} from './types';
 export { PowerFlowElement, definePowerFlow } from './element';
 
 // Auto-register <power-flow> on import in the browser, so dropping the tag in
