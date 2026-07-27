@@ -1,6 +1,16 @@
 import { PowerFlow } from './core';
 import type { FlowData, PowerFlowSettings } from './types';
 
+// `class X extends HTMLElement` evaluates `HTMLElement` the moment this
+// module loads — which throws in any environment without a DOM (Node
+// without jsdom, SSR frameworks before hydration), even if nothing there
+// ever tries to render a <power-flow>. Falling back to a plain stand-in
+// class means importing this module never crashes; definePowerFlow() below
+// already no-ops when `customElements` is unavailable, so the class simply
+// never gets registered (or usefully instantiated) in that environment.
+const HTMLElementBase: typeof HTMLElement =
+  typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as typeof HTMLElement);
+
 /**
  * `<power-flow>` custom element — a framework-agnostic energy-flow diagram.
  *
@@ -15,7 +25,7 @@ import type { FlowData, PowerFlowSettings } from './types';
  *
  *   <power-flow data='{"solar":3200,"grid":-800,"load":2400}'></power-flow>
  */
-export class PowerFlowElement extends HTMLElement {
+export class PowerFlowElement extends HTMLElementBase {
   static get observedAttributes() {
     return ['data', 'options'];
   }
