@@ -254,8 +254,8 @@ export class PowerFlow {
   // level, only changing how long the curve holds that direction before
   // turning: bend=0 collapses both handles onto their anchor point, which
   // degenerates the cubic bezier into the straight P0→P3 line; bend=1
-  // reproduces today's static `d` values exactly (the handles are already at
-  // that today's exact length); bend>1 stretches the handles further out,
+  // reproduces the skeleton's static `d` values exactly (the handles are
+  // already at that exact length); bend>1 stretches the handles further out,
   // reading as a straighter departure/arrival with a sharper turn in the
   // middle, rather than one continuously bulging arc.
   private applyCurveBend() {

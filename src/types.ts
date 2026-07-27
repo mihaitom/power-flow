@@ -40,8 +40,8 @@ export interface FlowData {
 
 /** Toggles individual built-in connections on/off to match wiring that
  *  doesn't allow a given flow (e.g. a PV source with no direct link to the
- *  house/grid, only to the battery). All default to `true` (today's
- *  behavior). Power that a disabled connection would have carried is simply
+ *  house/grid, only to the battery). All default to `true` (fully
+ *  connected). Power that a disabled connection would have carried is simply
  *  not drawn further (curtailed) — no spill/overflow is modeled elsewhere.
  *  `battery` ↔ `grid` is a single shared physical path in both directions,
  *  so `batteryToGrid: false` also hides the grid → battery charging dot. */
@@ -102,12 +102,12 @@ export interface FlowIcons {
 }
 
 /** How a node's background/ring/icon/text are painted:
- *  - `'soft'` (default) — today's look: a light tint of the accent color as
- *    background, plus a colored ring.
+ *  - `'soft'` (default) — a light tint of the accent color as background,
+ *    plus a colored ring.
  *  - `'tonal'` — an opaque, muted (pastel) fill in the accent color, no ring.
  *  - `'outline'` — transparent background, just a colored ring.
  *  - `'filled'` — the node's full accent color as background, icon/text
- *    switched to light or dark ink (picked per color) for contrast. */
+ *    switched to a uniform white with a drop shadow for contrast. */
 export type NodeStyle = 'soft' | 'tonal' | 'outline' | 'filled';
 
 /** Everything about the diagram other than the live `data` itself: colors,
@@ -131,8 +131,8 @@ export interface PowerFlowSettings {
   /** Scales the diagram's curved connections by stretching/shrinking how far
    *  each one travels in its fixed departure/arrival direction before
    *  turning. `0` collapses them into direct lines, `1` (the default) is
-   *  today's curve, values above `1` hold the straight direction longer with
-   *  a sharper turn in between. Clamped to `0–2` internally to keep curves
+   *  the standard curve, values above `1` hold the straight direction longer
+   *  with a sharper turn in between. Clamped to `0–2` internally to keep curves
    *  from crossing neighboring nodes. */
   curveBend: number;
 }

@@ -32,15 +32,15 @@ Same component, four looks — all just an <a href="#nodestyle"><code>options.no
 
 <br /><br />
 
-<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-filled.gif" alt="powerflow — filled node style, a balcony PV setup wired to charge only the battery" height="420" />
+<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-filled.gif" alt="powerflow — filled node style with full-size background icons and arrowhead flow dots, a balcony PV setup wired to charge only the battery" height="420" />
 
-<sub><code>filled</code> — a balcony-PV <a href="#flowtopology"><code>topology</code></a> where solar can only reach the battery.</sub>
+<sub><code>filled</code> — a balcony-PV <a href="#flowtopology"><code>topology</code></a> where solar can only reach the battery, plus <a href="#iconstyle"><code>iconStyle: 'full'</code></a> and <a href="#dotshape"><code>dotShape: 'triangle'</code></a> on top.</sub>
 
 <br /><br />
 
-<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-tonal.gif" alt="powerflow — tonal node style with full-size background icons and arrowhead flow dots" height="420" />
+<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-tonal.gif" alt="powerflow — tonal node style" height="420" />
 
-<sub><code>tonal</code> — with <a href="#iconstyle"><code>iconStyle: 'full'</code></a> and <a href="#dotshape"><code>dotShape: 'triangle'</code></a> on top.</sub>
+<sub><code>tonal</code> — an opaque, muted fill with no ring.</sub>
 
 </div>
 
@@ -216,7 +216,7 @@ leak into your app.
 | `nodeStyle`  | `'soft' \| 'tonal' \| 'outline' \| 'filled'` | How each node's background/ring/icon/text are painted. Default `'soft'`. |
 | `iconStyle`  | `'default' \| 'full'`    | `'full'` draws each icon large behind its value/label text. Default `'default'`. |
 | `dotShape`   | `'circle' \| 'triangle'` | `'triangle'` draws flow dots as arrowheads pointing in their direction of travel. Default `'circle'`. |
-| `curveBend`  | `number`                 | Shape of the diagram's curved connections. `0` = straight lines, `1` (default) = today's curve, up to `2` = straighter departure/arrival with a sharper turn. |
+| `curveBend`  | `number`                 | Shape of the diagram's curved connections. `0` = straight lines, `1` = the standard curve (default), up to `2` = straighter departure/arrival with a sharper turn. |
 
 `options` is set as a whole (`pf.options = { iconStyle: 'full' }`) rather than
 merged automatically — pass along whatever previous fields you want to keep,
@@ -282,8 +282,8 @@ red conflict indicator at (3,3) in place of either value, and logs a
 Some installations don't have every connection the default layout assumes —
 e.g. a balcony/plug-in PV system wired so it can only ever charge the battery,
 never feed the house or grid directly. `topology` lets you disable individual
-built-in connections; everything defaults to `true` (today's behavior), so
-existing configs are unaffected:
+built-in connections; everything defaults to `true`, so a fully-connected
+system needs no `topology` at all:
 
 ```ts
 pf.options = {
@@ -408,7 +408,7 @@ further from a straight line:
 
 ```ts
 pf.options = { ...pf.options, curveBend: 0 }; // straightens every curve into a direct line
-pf.options = { ...pf.options, curveBend: 1 }; // today's curve (the default)
+pf.options = { ...pf.options, curveBend: 1 }; // the standard curve (the default)
 pf.options = { ...pf.options, curveBend: 2 }; // longer straight run out of/into each node, with a
 // sharper turn in between (the maximum — kept at 2 so curves don't cross
 // neighboring nodes)

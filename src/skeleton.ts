@@ -63,7 +63,7 @@ export function trackIdFor(pathId: string): string {
 }
 
 // The 6 tracks that are true cubic bezier curves (the rest are straight H/V
-// lines). Control points are exactly today's static `d` values below, so
+// lines). Control points are exactly the static `d` values below, so
 // `curveBend = 1` (the default) reproduces the current geometry precisely —
 // see applyCurveBend() in core.ts, which blends each point toward the
 // straight P0→P3 line as `curveBend` drops toward 0.
