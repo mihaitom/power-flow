@@ -18,7 +18,7 @@ import {
 } from '@mdi/js';
 import { el } from './playground-dom';
 
-// Only the four structural nodes shuffle here. wallbox/wallbox2/batteryLoad/
+// Only the four structural nodes shuffle here. consumer1-4/batteryLoad1/
 // batteryLoad2 are owned by playground-appliances.ts instead (see
 // `currentIcons` below, which both modules share) — keeping them out of this
 // pool avoids the two shuffle features fighting over the same keys.
@@ -31,13 +31,15 @@ export const ICON_OPTIONS: Record<string, string[]> = {
 const STRUCTURAL_DEFAULT_ICONS = Object.fromEntries(
   Object.entries(ICON_OPTIONS).map(([k, opts]) => [k, opts[0]]),
 );
-// Full 8-key default set, matching core.ts's own DEFAULT_ICONS for the
-// wallbox-family keys — the starting point before any appliance is shuffled.
+// Full default set, matching core.ts's own DEFAULT_ICONS for the
+// consumer-slot keys — the starting point before any appliance is shuffled.
 export const DEFAULT_ICONS: Record<string, string> = {
   ...STRUCTURAL_DEFAULT_ICONS,
-  wallbox: mdiEvStation,
-  wallbox2: mdiEvStation,
-  batteryLoad: mdiPowerSocket,
+  consumer1: mdiPowerSocket,
+  consumer2: mdiPowerSocket,
+  consumer3: mdiPowerSocket,
+  consumer4: mdiPowerSocket,
+  batteryLoad1: mdiPowerSocket,
   batteryLoad2: mdiPowerSocket,
 };
 export const ICON_NAMES: Record<string, string> = {
@@ -59,7 +61,7 @@ export const ICON_NAMES: Record<string, string> = {
   [mdiPowerSocket]: 'mdiPowerSocket',
 };
 
-// Shared with playground-appliances.ts, which mutates the wallbox-family
+// Shared with playground-appliances.ts, which mutates the consumer-slot
 // keys directly (object mutation, not reassignment — reassigning an
 // imported binding isn't allowed, but writing its properties is) and then
 // re-sets `el.icons` itself. Kept as one object so neither module's

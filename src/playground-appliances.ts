@@ -17,10 +17,10 @@ import {
 import { el } from './playground-dom';
 import { currentIcons } from './playground-icons';
 
-// Demonstrates that wallbox/wallbox2/batteryLoad/batteryLoad2 aren't
-// specifically about EV charging — they're generic "direct consumer" slots.
-// A pool of common large, individually-monitored household loads, each with
-// a matching icon.
+// Demonstrates that consumer1/consumer2/consumer3/consumer4/batteryLoad1/
+// batteryLoad2 aren't specifically about EV charging — they're generic
+// "direct consumer" slots. A pool of common large, individually-monitored
+// household loads, each with a matching icon.
 interface Appliance {
   label: string;
   icon: string;
@@ -34,6 +34,7 @@ const APPLIANCES: Appliance[] = [
   { label: 'Server Rack', icon: mdiServerNetwork },
   { label: 'Gaming PC', icon: mdiDesktopTower },
   { label: 'EV Charger', icon: mdiEvStation },
+  { label: 'Wallbox', icon: mdiEvStation },
   { label: 'Washer', icon: mdiWashingMachine },
   { label: 'Dryer', icon: mdiTumbleDryer },
   { label: 'Dishwasher', icon: mdiDishwasher },
@@ -42,7 +43,14 @@ const APPLIANCES: Appliance[] = [
   { label: 'Freezer', icon: mdiFridgeIndustrial },
 ];
 
-const SLOTS = ['wallbox', 'wallbox2', 'batteryLoad', 'batteryLoad2'] as const;
+const SLOTS = [
+  'consumer1',
+  'consumer2',
+  'consumer3',
+  'consumer4',
+  'batteryLoad1',
+  'batteryLoad2',
+] as const;
 
 // So playground-share.ts's snippet generator can emit a clean `mdiXxx` import
 // for these too, instead of falling back to an inline raw path string.
@@ -63,14 +71,13 @@ export const APPLIANCE_ICON_NAMES: Record<string, string> = {
   [mdiFridgeIndustrial]: 'mdiFridgeIndustrial',
 };
 
-/** `null` until the button has been clicked at least once — lets
- *  playground-share.ts's snippet generator know whether to include labels
- *  at all. */
+/** Set as soon as appliances are shuffled (which now happens once up front,
+ *  so this is non-null from load onward) — lets playground-share.ts's
+ *  snippet generator know whether to include labels at all. */
 export let currentLabels: Record<string, string> | null = null;
 
-const appliancesBtn = document.getElementById('shuffle-appliances') as HTMLElement;
-appliancesBtn.addEventListener('click', () => {
-  // Pick 4 distinct appliances (partial Fisher-Yates over a copy of the pool).
+function shuffleAppliances() {
+  // Pick 6 distinct appliances (partial Fisher-Yates over a copy of the pool).
   const pool = [...APPLIANCES];
   const picks = SLOTS.map(
     () => pool.splice(Math.floor(Math.random() * pool.length), 1)[0],
@@ -84,4 +91,12 @@ appliancesBtn.addEventListener('click', () => {
   currentLabels = labels;
   el.labels = labels;
   el.icons = currentIcons;
-});
+}
+
+const appliancesBtn = document.getElementById('shuffle-appliances') as HTMLElement;
+appliancesBtn.addEventListener('click', shuffleAppliances);
+
+// Shuffle once up front so the playground opens with varied, realistic
+// appliance names/icons in the consumer slots instead of the generic
+// "Consumer 1"/"Consumer 2" defaults.
+shuffleAppliances();

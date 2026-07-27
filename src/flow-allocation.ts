@@ -18,7 +18,7 @@ export interface FlowAllocation {
  * double-counted. See the "How the flows are computed" section of the
  * README for the full rationale, including the tricky case this priority
  * order is designed for (charge the battery before serving the house) and
- * how `topology` and `batteryLoad`/`batteryLoad2` affect it. Pure function,
+ * how `topology` and `batteryLoad1`/`batteryLoad2` affect it. Pure function,
  * no rendering side effects — used by `PowerFlow.update()` and directly
  * unit-testable.
  */
@@ -29,12 +29,12 @@ export function computeFlowAllocation(
   const solarWatts = data.solar ?? 0;
   const loadWatts = data.load ?? 0;
   const batteryWatts = data.battery ?? 0;
-  const batteryLoadWatts = data.batteryLoad ?? 0;
+  const batteryLoad1Watts = data.batteryLoad1 ?? 0;
   const batteryLoad2Watts = data.batteryLoad2 ?? 0;
 
   const solarP = Math.max(solarWatts, 0);
   const load = Math.max(loadWatts, 0);
-  // batteryLoad/batteryLoad2 are sub-consumers of the battery's discharge —
+  // batteryLoad1/batteryLoad2 are sub-consumers of the battery's discharge —
   // but since `battery` is only ever a single NET reading, a direct load
   // pulling power out of the battery pulls that net reading toward
   // discharge, so MORE gross charging (from solar/grid) is actually needed
@@ -42,10 +42,10 @@ export function computeFlowAllocation(
   // while also feeding 1150W of direct loads needs 1250W of gross charge,
   // not 100W. `chargeNeed`/`dischargeAvailable` fold directLoads in up
   // front so every formula below already accounts for it — they reduce to
-  // the plain battery charge/discharge split whenever batteryLoad/
+  // the plain battery charge/discharge split whenever batteryLoad1/
   // batteryLoad2 are both 0.
   const directLoads =
-    Math.max(batteryLoadWatts, 0) + Math.max(batteryLoad2Watts, 0);
+    Math.max(batteryLoad1Watts, 0) + Math.max(batteryLoad2Watts, 0);
   const chargeNeed = Math.max(directLoads - batteryWatts, 0);
   const dischargeAvailable = Math.max(batteryWatts - directLoads, 0);
 

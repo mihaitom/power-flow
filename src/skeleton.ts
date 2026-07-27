@@ -3,8 +3,8 @@ import {
   mdiTransmissionTower,
   mdiHome,
   mdiBatteryMedium,
-  mdiEvStation,
   mdiPowerSocket,
+  mdiAlertCircle,
 } from '@mdi/js';
 
 const SVGNS = 'http://www.w3.org/2000/svg';
@@ -33,12 +33,11 @@ export const DOTS: { id: string; cls: string; path: string; reverse?: boolean }[
   { id: 'solar-bat', cls: 'solar', path: 'p-solar-bat' },
   // Grid → battery shares the battery↔grid path, run in reverse (grid to battery).
   { id: 'grid-bat', cls: 'grid', path: 'p-bat-grid', reverse: true },
-  { id: 'home-wallbox', cls: 'wallbox', path: 'p-home-wallbox' },
-  // Wallbox's 4th-column fallback, used when it must make room for
-  // batteryLoad2 in its usual slot (see `wallboxNeedsColumn4` in `update()`).
-  { id: 'home-wallbox4', cls: 'wallbox', path: 'p-home-wallbox4' },
-  { id: 'home-wallbox2', cls: 'wallbox2', path: 'p-home-wallbox2' },
-  { id: 'bat-batteryload', cls: 'battery-load', path: 'p-bat-batteryload' },
+  { id: 'home-consumer1', cls: 'consumer1', path: 'p-home-consumer1' },
+  { id: 'home-consumer2', cls: 'consumer2', path: 'p-home-consumer2' },
+  { id: 'home-consumer3', cls: 'consumer3', path: 'p-home-consumer3' },
+  { id: 'home-consumer4', cls: 'consumer4', path: 'p-home-consumer4' },
+  { id: 'bat-batteryload1', cls: 'battery-load1', path: 'p-bat-batteryload1' },
   { id: 'bat-batteryload2', cls: 'battery-load2', path: 'p-bat-batteryload2' },
 ];
 
@@ -50,9 +49,11 @@ export const DOT_CLS_TO_COLOR_VAR: Record<string, string> = {
   solar: 'solar',
   grid: 'grid-in',
   'battery-out': 'battery-out',
-  wallbox: 'wallbox',
-  wallbox2: 'wallbox2',
-  'battery-load': 'battery-load',
+  consumer1: 'consumer1',
+  consumer2: 'consumer2',
+  consumer3: 'consumer3',
+  consumer4: 'consumer4',
+  'battery-load1': 'battery-load1',
   'battery-load2': 'battery-load2',
 };
 
@@ -94,9 +95,11 @@ export const CSS = `
 .dot.solar { fill: var(--sfd-solar); stroke: var(--sfd-solar); }
 .dot.grid { fill: var(--sfd-grid-in); stroke: var(--sfd-grid-in); }
 .dot.battery-out { fill: var(--sfd-battery-out); stroke: var(--sfd-battery-out); }
-.dot.wallbox { fill: var(--sfd-wallbox); stroke: var(--sfd-wallbox); }
-.dot.wallbox2 { fill: var(--sfd-wallbox2); stroke: var(--sfd-wallbox2); }
-.dot.battery-load { fill: var(--sfd-battery-load); stroke: var(--sfd-battery-load); }
+.dot.consumer1 { fill: var(--sfd-consumer1); stroke: var(--sfd-consumer1); }
+.dot.consumer2 { fill: var(--sfd-consumer2); stroke: var(--sfd-consumer2); }
+.dot.consumer3 { fill: var(--sfd-consumer3); stroke: var(--sfd-consumer3); }
+.dot.consumer4 { fill: var(--sfd-consumer4); stroke: var(--sfd-consumer4); }
+.dot.battery-load1 { fill: var(--sfd-battery-load1); stroke: var(--sfd-battery-load1); }
 .dot.battery-load2 { fill: var(--sfd-battery-load2); stroke: var(--sfd-battery-load2); }
 
 .node { transition: opacity 0.35s ease; }
@@ -127,7 +130,7 @@ export const CSS = `
 `;
 
 // Static SVG skeleton. Every node, track and dot is present from the start;
-// topology (battery/wallbox) is toggled via `display`, so path lengths only
+// topology (battery/consumer1) is toggled via `display`, so path lengths only
 // have to be measured once and SMIL animations never restart on toggle.
 //
 // Diagonal paths fan out at the grid/home side by ±12 (y=173/197), mirroring
@@ -141,24 +144,29 @@ export const SKELETON = `
     <path id="p-bat-home" d="M212,258 C212,220 256,197 294,197" />
     <path id="p-bat-grid" d="M188,258 C188,220 144,197 106,197" />
     <path id="p-solar-bat" d="M200,112 V258" />
-    <path id="p-home-wallbox" d="M345,237 V258" />
-    <!-- Wallbox's 4th-column fallback (490,310), used only when it must
-         yield its usual slot to batteryLoad2 (which sits at 345,310, right
-         in between home and the 4th column). Home and wallbox4 sit exactly
-         (145,125) apart — the same offset as grid and battery — so this is
-         literally the p-bat-grid curve, reversed (that one runs battery→grid,
-         we need the grid→battery direction) and translated by (290,0), the
-         grid→home / battery→wallbox4 offset. Every control point stays at
-         y ≤ 258 (batteryLoad2's own top edge), so the curve's convex hull
-         stays entirely above batteryLoad2 and can never touch it. -->
-    <path id="p-home-wallbox4" d="M396,197 C434,197 478,220 478,258" />
-    <path id="p-home-wallbox2" d="M345,133 V112" />
-    <!-- batteryLoad always sits in the always-free (55,310) slot beside the
-         battery; batteryLoad2 always sits at (345,310) — wallbox moves to
-         the 4th column instead when both wallbox and batteryLoad2 are
-         active (see wallboxNeedsColumn4 in update()). No extra row ever
-         needed. -->
-    <path id="p-bat-batteryload" d="M148,310 H107" />
+    <!-- consumer1 is the top-left slot (345,60), consumer2 the bottom-left
+         slot (345,310) — swapped from a naive 1=bottom/2=top numbering so
+         consumer1/2 read top-to-bottom like consumer3/4 do. -->
+    <path id="p-home-consumer1" d="M345,133 V112" />
+    <path id="p-home-consumer2" d="M345,237 V258" />
+    <!-- Home's 4th consumer, bottom-right (490,310). Home and this node sit
+         exactly (145,125) apart — the same offset as grid and battery — so
+         this is literally the p-bat-grid curve, reversed (that one runs
+         battery→grid, we need the grid→battery direction) and translated by
+         (290,0), the grid→home / battery→consumer4 offset. Every control
+         point stays at y ≤ 258 (consumer2/batteryLoad2's own top edge at
+         345,310), so the curve's convex hull stays entirely clear of that
+         node. -->
+    <path id="p-home-consumer4" d="M396,197 C434,197 478,220 478,258" />
+    <!-- Home's 3rd consumer, top-right (490,60) — the same curve as
+         p-home-consumer4, mirrored vertically around home's own row (y=185:
+         y' = 370 − y), so it stays clear of consumer1 (345,60) the same way
+         consumer4's curve stays clear of consumer2/batteryLoad2 (345,310). -->
+    <path id="p-home-consumer3" d="M396,173 C434,173 478,150 478,112" />
+    <!-- batteryLoad1 always sits in the always-free (55,310) slot beside the
+         battery. batteryLoad2 shares the (345,310) slot with consumer2 — see
+         the slot-conflict indicator below. -->
+    <path id="p-bat-batteryload1" d="M148,310 H107" />
     <path id="p-bat-batteryload2" d="M252,310 H293" />
   </defs>
 
@@ -175,10 +183,11 @@ export const SKELETON = `
   <use id="use-bat-home" href="#p-bat-home" class="track" />
   <use id="use-bat-grid" href="#p-bat-grid" class="track" />
   <use id="use-solar-bat" href="#p-solar-bat" class="track" />
-  <use id="use-home-wallbox" href="#p-home-wallbox" class="track" data-topo="wallbox" />
-  <use id="use-home-wallbox4" href="#p-home-wallbox4" class="track" data-topo="wallbox4" />
-  <use id="use-home-wallbox2" href="#p-home-wallbox2" class="track" data-topo="wallbox2" />
-  <use id="use-bat-batteryload" href="#p-bat-batteryload" class="track" data-topo="batteryLoad" />
+  <use id="use-home-consumer1" href="#p-home-consumer1" class="track" data-topo="consumer1" />
+  <use id="use-home-consumer2" href="#p-home-consumer2" class="track" data-topo="consumer2" />
+  <use id="use-home-consumer3" href="#p-home-consumer3" class="track" data-topo="consumer3" />
+  <use id="use-home-consumer4" href="#p-home-consumer4" class="track" data-topo="consumer4" />
+  <use id="use-bat-batteryload1" href="#p-bat-batteryload1" class="track" data-topo="batteryLoad1" />
   <use id="use-bat-batteryload2" href="#p-bat-batteryload2" class="track" data-topo="batteryLoad2" />
 
   ${DOTS.map(
@@ -225,13 +234,22 @@ export const SKELETON = `
     <text x="345" y="214" class="lbl-text" id="t-home-lbl"></text>
   </g>
 
-  <!-- ── Wallbox 2 (above the house, optional) ── -->
-  <g id="n-wallbox2" class="node" data-topo="wallbox2">
-    <circle cx="345" cy="60" r="52" class="node-bg" id="wb2-bg" />
-    <circle cx="345" cy="60" r="52" class="node-ring" id="wb2-ring" />
-    <path id="wb2-icon" class="node-icon" transform="${iconTransform(345, 42, 28)}" d="${mdiEvStation}" />
-    <text x="345" y="76" class="val-text" id="t-wb2-val"></text>
-    <text x="345" y="89" class="lbl-text" id="t-wb2-lbl"></text>
+  <!-- ── House consumer 1 (above the house, optional) ── -->
+  <g id="n-consumer1" class="node" data-topo="consumer1">
+    <circle cx="345" cy="60" r="52" class="node-bg" id="c1-bg" />
+    <circle cx="345" cy="60" r="52" class="node-ring" id="c1-ring" />
+    <path id="c1-icon" class="node-icon" transform="${iconTransform(345, 42, 28)}" d="${mdiPowerSocket}" />
+    <text x="345" y="76" class="val-text" id="t-c1-val"></text>
+    <text x="345" y="89" class="lbl-text" id="t-c1-lbl"></text>
+  </g>
+
+  <!-- ── House consumer 3 (top-right, optional) ── -->
+  <g id="n-consumer3" class="node" data-topo="consumer3">
+    <circle cx="490" cy="60" r="52" class="node-bg" id="c3-bg" />
+    <circle cx="490" cy="60" r="52" class="node-ring" id="c3-ring" />
+    <path id="c3-icon" class="node-icon" transform="${iconTransform(490, 42, 28)}" d="${mdiPowerSocket}" />
+    <text x="490" y="76" class="val-text" id="t-c3-val"></text>
+    <text x="490" y="89" class="lbl-text" id="t-c3-lbl"></text>
   </g>
 
   <!-- ── Battery (bottom, optional) ── -->
@@ -245,44 +263,55 @@ export const SKELETON = `
     <text x="200" y="341" class="lbl-text" id="t-bat-lbl"></text>
   </g>
 
-  <!-- ── Wallbox (below the house, optional) ── -->
-  <g id="n-wallbox" class="node" data-topo="wallbox">
-    <circle cx="345" cy="310" r="52" class="node-bg" id="wb-bg" />
-    <circle cx="345" cy="310" r="52" class="node-ring" id="wb-ring" />
-    <path id="wb-icon" class="node-icon" transform="${iconTransform(345, 290, 28)}" d="${mdiEvStation}" />
-    <text x="345" y="328" class="val-text" id="t-wb-val"></text>
-    <text x="345" y="341" class="lbl-text" id="t-wb-lbl"></text>
+  <!-- ── House consumer 2 (below the house, optional) ── -->
+  <g id="n-consumer2" class="node" data-topo="consumer2">
+    <circle cx="345" cy="310" r="52" class="node-bg" id="c2-bg" />
+    <circle cx="345" cy="310" r="52" class="node-ring" id="c2-ring" />
+    <path id="c2-icon" class="node-icon" transform="${iconTransform(345, 292, 28)}" d="${mdiPowerSocket}" />
+    <text x="345" y="326" class="val-text" id="t-c2-val"></text>
+    <text x="345" y="339" class="lbl-text" id="t-c2-lbl"></text>
   </g>
 
-  <!-- ── Wallbox, 4th-column fallback (optional) — used instead of the node
-       above when batteryLoad2 needs the (345,310) slot. ── -->
-  <g id="n-wallbox4" class="node" data-topo="wallbox4">
-    <circle cx="490" cy="310" r="52" class="node-bg" id="wb4-bg" />
-    <circle cx="490" cy="310" r="52" class="node-ring" id="wb4-ring" />
-    <path id="wb4-icon" class="node-icon" transform="${iconTransform(490, 290, 28)}" d="${mdiEvStation}" />
-    <text x="490" y="328" class="val-text" id="t-wb4-val"></text>
-    <text x="490" y="341" class="lbl-text" id="t-wb4-lbl"></text>
+  <!-- ── House consumer 4 (bottom-right, optional) ── -->
+  <g id="n-consumer4" class="node" data-topo="consumer4">
+    <circle cx="490" cy="310" r="52" class="node-bg" id="c4-bg" />
+    <circle cx="490" cy="310" r="52" class="node-ring" id="c4-ring" />
+    <path id="c4-icon" class="node-icon" transform="${iconTransform(490, 292, 28)}" d="${mdiPowerSocket}" />
+    <text x="490" y="326" class="val-text" id="t-c4-val"></text>
+    <text x="490" y="339" class="lbl-text" id="t-c4-lbl"></text>
   </g>
 
   <!-- ── Battery load 1 (beside the battery, optional) — always fits in the
        bottom row, no matter which other optional nodes are shown. ── -->
-  <g id="n-batteryload" class="node" data-topo="batteryLoad">
-    <circle cx="55" cy="310" r="52" class="node-bg" id="bl-bg" />
-    <circle cx="55" cy="310" r="52" class="node-ring" id="bl-ring" />
-    <path id="bl-icon" class="node-icon" transform="${iconTransform(55, 290, 28)}" d="${mdiPowerSocket}" />
-    <text x="55" y="328" class="val-text" id="t-bl-val"></text>
-    <text x="55" y="341" class="lbl-text" id="t-bl-lbl"></text>
+  <g id="n-batteryload1" class="node" data-topo="batteryLoad1">
+    <circle cx="55" cy="310" r="52" class="node-bg" id="bl1-bg" />
+    <circle cx="55" cy="310" r="52" class="node-ring" id="bl1-ring" />
+    <path id="bl1-icon" class="node-icon" transform="${iconTransform(55, 292, 28)}" d="${mdiPowerSocket}" />
+    <text x="55" y="326" class="val-text" id="t-bl1-val"></text>
+    <text x="55" y="339" class="lbl-text" id="t-bl1-lbl"></text>
   </g>
 
-  <!-- ── Battery load 2 (optional) — always at (345,310); wallbox moves to
-       its 4th-column fallback instead of the other way around, so this node
-       never needs to relocate. ── -->
+  <!-- ── Battery load 2 (optional) — shares its slot (345,310) with consumer2;
+       see the slot-conflict indicator below. ── -->
   <g id="n-batteryload2" class="node" data-topo="batteryLoad2">
     <circle cx="345" cy="310" r="52" class="node-bg" id="bl2-bg" />
     <circle cx="345" cy="310" r="52" class="node-ring" id="bl2-ring" />
-    <path id="bl2-icon" class="node-icon" transform="${iconTransform(345, 290, 28)}" d="${mdiPowerSocket}" />
-    <text x="345" y="328" class="val-text" id="t-bl2-val"></text>
-    <text x="345" y="341" class="lbl-text" id="t-bl2-lbl"></text>
+    <path id="bl2-icon" class="node-icon" transform="${iconTransform(345, 292, 28)}" d="${mdiPowerSocket}" />
+    <text x="345" y="326" class="val-text" id="t-bl2-val"></text>
+    <text x="345" y="339" class="lbl-text" id="t-bl2-lbl"></text>
+  </g>
+
+  <!-- ── Slot conflict indicator (345,310) — shown instead of both consumer2
+       and batteryLoad2 when a caller sets both at once (they share this
+       position; see update()'s hasSlotConflict). Styled directly with fixed
+       colors in JS rather than a FlowColors entry, since it signals a data
+       misconfiguration rather than a themable flow. ── -->
+  <g id="n-slot-conflict" class="node" data-topo="slotConflict">
+    <circle cx="345" cy="310" r="52" class="node-bg" id="conflict-bg" />
+    <circle cx="345" cy="310" r="52" class="node-ring" id="conflict-ring" />
+    <path id="conflict-icon" class="node-icon" transform="${iconTransform(345, 292, 28)}" d="${mdiAlertCircle}" />
+    <text x="345" y="325" class="lbl-text" id="t-conflict-lbl">Conflict</text>
+    <title id="conflict-title">consumer2 and batteryLoad2 cannot both be set — they share the same position. See the "Consumer slot layout" section of the README.</title>
   </g>
 </svg>
 `;

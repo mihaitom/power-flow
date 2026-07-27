@@ -4,8 +4,8 @@
 
 **Animated, framework-agnostic SVG energy-flow diagram.**
 
-Live power flow between **solar, grid, home, battery and two wallboxes** — with
-dots whose speed is proportional to the actual power.
+Live power flow between **solar, grid, home, battery and configurable
+consumer slots** — with dots whose speed is proportional to the actual power.
 
 [![npm](https://img.shields.io/npm/v/powerflow?color=cb3837&logo=npm)](https://www.npmjs.com/package/powerflow)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/powerflow?label=min%2Bgzip)](https://bundlephobia.com/package/powerflow)
@@ -28,9 +28,9 @@ It ships as a `<power-flow>` **Web Component**, so it works natively in **React,
 Angular, Vue, Svelte or plain HTML** — plus a tiny vanilla API. No canvas, just
 crisp scalable vectors; no runtime framework dependency.
 
-- **Optional nodes** — solar, battery, both wallboxes and both battery-fed
-  direct loads appear automatically when you pass their values; empty rows are
-  trimmed so there's no dead space.
+- **Optional nodes** — solar, battery, up to four home consumer slots and two
+  battery-fed direct loads appear automatically when you pass their values;
+  empty rows are trimmed so there's no dead space.
 - **Configurable topology** — disable individual built-in connections (e.g. a
   PV source wired only to the battery, never to the house/grid) via
   `topology`, without touching anything else.
@@ -80,8 +80,8 @@ npm install powerflow
     load: 2400, // total house consumption (W)
     battery: -500, // negative = charging, positive = discharging; omit/null hides
     batterySoc: 72, // state of charge in % (optional, shows SoC ring)
-    wallbox: 3600, // EV charger below the house (optional)
-    wallbox2: 3600, // second EV charger above the house (optional)
+    consumer1: 3600, // generic house consumer, drawn above the house (optional)
+    consumer2: 3600, // second house consumer, drawn below the house (optional)
   };
 </script>
 ```
@@ -173,19 +173,51 @@ leak into your app.
 | `load`       | `number`         | Total house consumption (≥ 0).                           |
 | `battery`    | `number \| null` | Positive = discharging, negative = charging. Optional.   |
 | `batterySoc` | `number \| null` | Battery state of charge in percent. Optional.            |
-| `wallbox`    | `number \| null` | EV charger consumption, drawn below the house. Optional. |
-| `wallbox2`   | `number \| null` | Second EV charger, drawn above the house. Optional.      |
-| `batteryLoad`  | `number \| null` | Load fed directly from a battery output port, bypassing the house (e.g. an AC unit wired straight to the battery). Optional. |
-| `batteryLoad2` | `number \| null` | Second battery-fed direct load, same as `batteryLoad`. Optional. |
+| `consumer1`  | `number \| null` | Home consumer 1, drawn top-left of the house. Optional.     |
+| `consumer2`  | `number \| null` | Home consumer 2, drawn bottom-left of the house. Optional.  |
+| `consumer3`  | `number \| null` | Home consumer 3, drawn top-right of the house. Optional.    |
+| `consumer4`  | `number \| null` | Home consumer 4, drawn bottom-right of the house. Optional. |
+| `batteryLoad1`  | `number \| null` | Load fed directly from a battery output port, bypassing the house (e.g. an AC unit wired straight to the battery). Optional. |
+| `batteryLoad2` | `number \| null` | Second battery-fed direct load, same as `batteryLoad1`. Optional. |
 
 > Only `grid` and `load` are required. Omitting (or passing `null` for) `solar`
-> / `battery` / `wallbox` / `wallbox2` / `batteryLoad` / `batteryLoad2` hides
-> that node, and the diagram trims the now-empty row so there's no dead space.
-> Both wallboxes are sub-consumers of `load`, not extra load on top of it.
-> Likewise, `batteryLoad` and `batteryLoad2` are sub-consumers of `battery`'s
-> discharge — already included in it, drawn as a separate leg, not extra
-> discharge on top. `batteryLoad`/`batteryLoad2` only render when `battery` is
-> also set.
+> / `battery` / `consumer1` / `consumer2` / `consumer3` / `consumer4` /
+> `batteryLoad1` / `batteryLoad2` hides that node, and the diagram trims the
+> now-empty row so there's no dead space. All four `consumer*` fields are
+> generic — not necessarily EV chargers, use `labels`/`icons` to relabel one
+> for whatever appliance it actually is — and are sub-consumers of `load`,
+> not extra load on top of it. Likewise, `batteryLoad1`
+> and `batteryLoad2` are sub-consumers of `battery`'s discharge — already
+> included in it, drawn as a separate leg, not extra discharge on top.
+> `batteryLoad1`/`batteryLoad2` only render when `battery` is also set. See
+> [Consumer slot layout](#consumer-slot-layout) below for exact positions and
+> a caveat about `consumer2` and `batteryLoad2` sharing a grid cell.
+
+### Consumer slot layout
+
+The diagram sits on a 3×4 grid (columns 1–4, rows 1–3). Home and battery each
+get their own configurable consumer slots within it:
+
+| Position | Field          | Notes                                                                   |
+| -------- | -------------- | ------------------------------------------------------------------------ |
+| (3,1)    | `consumer1`    | Home consumer 1, top-left                                              |
+| (4,1)    | `consumer3`    | Home consumer 3, top-right                                             |
+| (3,3)    | `consumer2`    | Home consumer 2, bottom-left — **shares this cell with `batteryLoad2`** |
+| (4,3)    | `consumer4`    | Home consumer 4, bottom-right                                          |
+| (1,3)    | `batteryLoad1`  | Battery-fed direct load 1                                               |
+| (3,3)    | `batteryLoad2` | Battery-fed direct load 2 — **shares this cell with `consumer2`**       |
+
+Home has four slots and battery has two, but the grid only has room for five
+distinct positions between them, so `consumer2` and `batteryLoad2` are pinned to
+the same cell (3,3). This is deliberate: which one you actually use depends on
+your wiring (a load hanging off the house vs. one wired straight to the
+battery), so in practice at most one of them is ever set for a given
+installation. If your data ever sets **both** at once — e.g. two independent
+data sources feeding the same `pf.data` object — that's a misconfiguration
+`powerflow` can't resolve on your behalf, so instead of guessing it renders a
+red conflict indicator at (3,3) in place of either value, and logs a
+`console.warn` once. Fix it by ensuring only one of `consumer2` /
+`batteryLoad2` is set (non-`null`) at a time.
 
 ### `FlowTopology`
 
@@ -229,9 +261,11 @@ pf.topology = { solarToHome: false, solarToGrid: false };
   gridOut:    "#f472b6", // pink      — exporting to grid
   batteryIn:  "#4ade80", // lime green — charging
   batteryOut: "#fb923c", // orange    — discharging
-  wallbox:    "#22d3ee", // cyan
-  wallbox2:   "#2dd4bf", // teal
-  batteryLoad:  "#a78bfa", // violet — battery-fed direct load 1
+  consumer1: "#22d3ee", // cyan
+  consumer2: "#2dd4bf", // teal
+  consumer3: "#38bdf8", // sky blue
+  consumer4: "#0d9488", // deep teal
+  batteryLoad1:  "#a78bfa", // violet — battery-fed direct load 1
   batteryLoad2: "#c084fc", // purple — battery-fed direct load 2
 }
 ```
@@ -253,7 +287,7 @@ import { mdiSolarPanel, mdiFlash } from '@mdi/js';
 pf.icons = {
   solar: mdiSolarPanel, // swap the default solar-power-variant icon
   grid: mdiFlash, // swap the transmission tower
-  // home / battery / wallbox / wallbox2 / batteryLoad / batteryLoad2 — all optional
+  // home / battery / consumer1 / consumer2 / consumer3 / consumer4 / batteryLoad1 / batteryLoad2 — all optional
 };
 ```
 
@@ -274,7 +308,7 @@ Meters only tell you the net at each node, so `powerflow` decomposes them into
 the individual legs by priority — every source is split across the sinks it
 feeds, with nothing double-counted:
 
-1. `batteryLoad`/`batteryLoad2` (direct loads on the battery, not the house)
+1. `batteryLoad1`/`batteryLoad2` (direct loads on the battery, not the house)
    are folded into the battery's charge/discharge need first — since
    `battery` is only ever a single net reading, a direct load pulls that
    reading toward discharge, so more gross charging may actually be needed

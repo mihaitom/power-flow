@@ -3,7 +3,6 @@ import {
   mdiTransmissionTower,
   mdiHome,
   mdiBatteryMedium,
-  mdiEvStation,
   mdiPowerSocket,
 } from '@mdi/js';
 import type { FlowColors, FlowLabels, FlowIcons, FlowTopology } from './types';
@@ -15,9 +14,11 @@ export const DEFAULT_COLORS: FlowColors = {
   gridOut: '#f472b6', // pink-magenta — feeding back to grid
   batteryIn: '#4ade80', // lime green — charging (positive)
   batteryOut: '#fb923c', // orange — discharging (warm energy out)
-  wallbox: '#22d3ee', // cyan — EV charger 1
-  wallbox2: '#2dd4bf', // teal — EV charger 2
-  batteryLoad: '#a78bfa', // violet — battery-fed direct load 1
+  consumer1: '#22d3ee', // cyan — house consumer 1
+  consumer2: '#2dd4bf', // teal — house consumer 2
+  consumer3: '#38bdf8', // sky blue — house consumer 3
+  consumer4: '#0d9488', // deep teal — house consumer 4
+  batteryLoad1: '#a78bfa', // violet — battery-fed direct load 1
   batteryLoad2: '#c084fc', // purple — battery-fed direct load 2
 };
 
@@ -26,20 +27,27 @@ export const DEFAULT_LABELS: FlowLabels = {
   grid: 'Grid',
   home: 'Home',
   battery: 'Battery',
-  wallbox: 'Wallbox',
-  wallbox2: 'Wallbox 2',
-  batteryLoad: 'Battery Load',
+  consumer1: 'Consumer 1',
+  consumer2: 'Consumer 2',
+  consumer3: 'Consumer 3',
+  consumer4: 'Consumer 4',
+  batteryLoad1: 'Battery Load 1',
   batteryLoad2: 'Battery Load 2',
 };
 
+// Generic — these slots aren't specifically EV chargers, so the default icon
+// is a plain power socket, same as batteryLoad1/batteryLoad2. Callers relabel
+// via `icons`/`labels` for whatever appliance a slot actually represents.
 export const DEFAULT_ICONS: FlowIcons = {
   solar: mdiSolarPowerVariant,
   grid: mdiTransmissionTower,
   home: mdiHome,
   battery: mdiBatteryMedium,
-  wallbox: mdiEvStation,
-  wallbox2: mdiEvStation,
-  batteryLoad: mdiPowerSocket,
+  consumer1: mdiPowerSocket,
+  consumer2: mdiPowerSocket,
+  consumer3: mdiPowerSocket,
+  consumer4: mdiPowerSocket,
+  batteryLoad1: mdiPowerSocket,
   batteryLoad2: mdiPowerSocket,
 };
 

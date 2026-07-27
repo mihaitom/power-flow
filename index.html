@@ -74,18 +74,24 @@
             <input type="color" id="c-battery-in" value="#4ade80"
           /></label>
           <label
-            >Wallbox <input type="color" id="c-wallbox" value="#22d3ee"
-          /></label>
-          <label
             >Battery discharge
             <input type="color" id="c-battery-out" value="#fb923c"
           /></label>
           <label
-            >Wallbox 2 <input type="color" id="c-wallbox2" value="#2dd4bf"
+            >Consumer 1 <input type="color" id="c-consumer1" value="#22d3ee"
           /></label>
           <label
-            >Battery load
-            <input type="color" id="c-batteryLoad" value="#a78bfa"
+            >Consumer 2 <input type="color" id="c-consumer2" value="#2dd4bf"
+          /></label>
+          <label
+            >Consumer 3 <input type="color" id="c-consumer3" value="#38bdf8"
+          /></label>
+          <label
+            >Consumer 4 <input type="color" id="c-consumer4" value="#0d9488"
+          /></label>
+          <label
+            >Battery load 1
+            <input type="color" id="c-batteryLoad1" value="#a78bfa"
           /></label>
           <label
             >Battery load 2
@@ -159,13 +165,13 @@
         </div>
         <hr />
         <label class="toggle">
-          <input id="has-wallbox" type="checkbox" checked /> Wallbox (below
-          house)
+          <input id="has-consumer1" type="checkbox" checked /> Consumer 1
+          (above house)
         </label>
-        <div class="ctrl" id="wallbox-ctrls">
-          <label>Wallbox <span class="v" id="v-wallbox"></span></label>
+        <div class="ctrl" id="consumer1-ctrls">
+          <label>Consumer 1 <span class="v" id="v-consumer1"></span></label>
           <input
-            id="wallbox"
+            id="consumer1"
             type="range"
             min="0"
             max="11000"
@@ -175,13 +181,13 @@
         </div>
 
         <label class="toggle">
-          <input id="has-wallbox2" type="checkbox" checked /> Wallbox 2 (above
-          house)
+          <input id="has-consumer2" type="checkbox" checked /> Consumer 2
+          (below house)
         </label>
-        <div class="ctrl" id="wallbox2-ctrls">
-          <label>Wallbox 2 <span class="v" id="v-wallbox2"></span></label>
+        <div class="ctrl" id="consumer2-ctrls">
+          <label>Consumer 2 <span class="v" id="v-consumer2"></span></label>
           <input
-            id="wallbox2"
+            id="consumer2"
             type="range"
             min="0"
             max="11000"
@@ -190,16 +196,47 @@
           />
         </div>
 
+        <label class="toggle">
+          <input id="has-consumer3" type="checkbox" /> Consumer 3 (top-right)
+        </label>
+        <div class="ctrl" id="consumer3-ctrls">
+          <label>Consumer 3 <span class="v" id="v-consumer3"></span></label>
+          <input
+            id="consumer3"
+            type="range"
+            min="0"
+            max="11000"
+            step="100"
+            value="1500"
+          />
+        </div>
+
+        <label class="toggle">
+          <input id="has-consumer4" type="checkbox" /> Consumer 4
+          (bottom-right)
+        </label>
+        <div class="ctrl" id="consumer4-ctrls">
+          <label>Consumer 4 <span class="v" id="v-consumer4"></span></label>
+          <input
+            id="consumer4"
+            type="range"
+            min="0"
+            max="11000"
+            step="100"
+            value="2000"
+          />
+        </div>
+
         <hr />
 
         <label class="toggle">
-          <input id="has-batteryLoad" type="checkbox" /> Battery load (direct
+          <input id="has-batteryLoad1" type="checkbox" /> Battery load 1 (direct
           port)
         </label>
-        <div class="ctrl" id="batteryLoad-ctrls">
-          <label>Battery load <span class="v" id="v-batteryLoad"></span></label>
+        <div class="ctrl" id="batteryLoad1-ctrls">
+          <label>Battery load 1 <span class="v" id="v-batteryLoad1"></span></label>
           <input
-            id="batteryLoad"
+            id="batteryLoad1"
             type="range"
             min="0"
             max="3000"

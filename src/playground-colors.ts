@@ -7,9 +7,11 @@ export const colorIds: Record<string, string> = {
   gridOut: 'c-grid-out',
   batteryIn: 'c-battery-in',
   batteryOut: 'c-battery-out',
-  wallbox: 'c-wallbox',
-  wallbox2: 'c-wallbox2',
-  batteryLoad: 'c-batteryLoad',
+  consumer1: 'c-consumer1',
+  consumer2: 'c-consumer2',
+  consumer3: 'c-consumer3',
+  consumer4: 'c-consumer4',
+  batteryLoad1: 'c-batteryLoad1',
   batteryLoad2: 'c-batteryLoad2',
 };
 export const cinp = Object.fromEntries(

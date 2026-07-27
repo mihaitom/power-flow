@@ -10,9 +10,11 @@ import {
   inp,
   hasSolar,
   hasBat,
-  hasWb,
-  hasWb2,
-  hasBl,
+  hasC1,
+  hasC2,
+  hasC3,
+  hasC4,
+  hasBl1,
   hasBl2,
   topoInp,
   TOPOLOGY_KEYS,
@@ -20,9 +22,9 @@ import {
 import { cinp, DEFAULT_COLORS, applyColors } from './playground-colors';
 import { currentIcons, DEFAULT_ICONS, ICON_NAMES } from './playground-icons';
 import { currentLabels, APPLIANCE_ICON_NAMES } from './playground-appliances';
+import { updateLoadMin, updateGrid, speedInp, vSpeed } from './playground-state';
 
 const ALL_ICON_NAMES = { ...ICON_NAMES, ...APPLIANCE_ICON_NAMES };
-import { updateLoadMin, updateGrid, speedInp, vSpeed } from './playground-state';
 
 declare const hljs: {
   highlight: (code: string, opts: { language: string }) => { value: string };
@@ -115,9 +117,11 @@ function buildSnippet(fw: string): string {
     data.battery = +inp.battery.value;
     data.batterySoc = +inp.soc.value;
   }
-  if (hasWb.checked) data.wallbox = +inp.wallbox.value;
-  if (hasWb2.checked) data.wallbox2 = +inp.wallbox2.value;
-  if (hasBl.checked) data.batteryLoad = +inp.batteryLoad.value;
+  if (hasC1.checked) data.consumer1 = +inp.consumer1.value;
+  if (hasC2.checked) data.consumer2 = +inp.consumer2.value;
+  if (hasC3.checked) data.consumer3 = +inp.consumer3.value;
+  if (hasC4.checked) data.consumer4 = +inp.consumer4.value;
+  if (hasBl1.checked) data.batteryLoad1 = +inp.batteryLoad1.value;
   if (hasBl2.checked) data.batteryLoad2 = +inp.batteryLoad2.value;
 
   const changedTopology = Object.fromEntries(
@@ -273,17 +277,21 @@ function encodeState(): URLSearchParams {
   const p = new URLSearchParams();
   p.set('hasSolar', hasSolar.checked ? '1' : '0');
   p.set('hasBat', hasBat.checked ? '1' : '0');
-  p.set('hasWb', hasWb.checked ? '1' : '0');
-  p.set('hasWb2', hasWb2.checked ? '1' : '0');
-  p.set('hasBl', hasBl.checked ? '1' : '0');
+  p.set('hasC1', hasC1.checked ? '1' : '0');
+  p.set('hasC2', hasC2.checked ? '1' : '0');
+  p.set('hasC3', hasC3.checked ? '1' : '0');
+  p.set('hasC4', hasC4.checked ? '1' : '0');
+  p.set('hasBl', hasBl1.checked ? '1' : '0');
   p.set('hasBl2', hasBl2.checked ? '1' : '0');
   p.set('solar', inp.solar.value);
   p.set('load', inp.load.value);
   p.set('battery', inp.battery.value);
   p.set('soc', inp.soc.value);
-  p.set('wallbox', inp.wallbox.value);
-  p.set('wallbox2', inp.wallbox2.value);
-  p.set('batteryLoad', inp.batteryLoad.value);
+  p.set('consumer1', inp.consumer1.value);
+  p.set('consumer2', inp.consumer2.value);
+  p.set('consumer3', inp.consumer3.value);
+  p.set('consumer4', inp.consumer4.value);
+  p.set('batteryLoad1', inp.batteryLoad1.value);
   p.set('batteryLoad2', inp.batteryLoad2.value);
   p.set('speed', speedInp.value);
   for (const [k, i] of Object.entries(cinp)) {
@@ -309,9 +317,11 @@ document.addEventListener('pf:statechange', syncUrl);
   ...Object.values(inp),
   hasSolar,
   hasBat,
-  hasWb,
-  hasWb2,
-  hasBl,
+  hasC1,
+  hasC2,
+  hasC3,
+  hasC4,
+  hasBl1,
   hasBl2,
   speedInp,
   ...Object.values(cinp),
@@ -333,16 +343,20 @@ copyLinkBtn.addEventListener('click', () => {
   const p = new URLSearchParams(location.search);
   if (p.has('hasSolar')) hasSolar.checked = p.get('hasSolar') === '1';
   if (p.has('hasBat')) hasBat.checked = p.get('hasBat') === '1';
-  if (p.has('hasWb')) hasWb.checked = p.get('hasWb') === '1';
-  if (p.has('hasWb2')) hasWb2.checked = p.get('hasWb2') === '1';
-  if (p.has('hasBl')) hasBl.checked = p.get('hasBl') === '1';
+  if (p.has('hasC1')) hasC1.checked = p.get('hasC1') === '1';
+  if (p.has('hasC2')) hasC2.checked = p.get('hasC2') === '1';
+  if (p.has('hasC3')) hasC3.checked = p.get('hasC3') === '1';
+  if (p.has('hasC4')) hasC4.checked = p.get('hasC4') === '1';
+  if (p.has('hasBl')) hasBl1.checked = p.get('hasBl') === '1';
   if (p.has('hasBl2')) hasBl2.checked = p.get('hasBl2') === '1';
   if (p.has('solar')) inp.solar.value = p.get('solar')!;
   if (p.has('battery')) inp.battery.value = p.get('battery')!;
   if (p.has('soc')) inp.soc.value = p.get('soc')!;
-  if (p.has('wallbox')) inp.wallbox.value = p.get('wallbox')!;
-  if (p.has('wallbox2')) inp.wallbox2.value = p.get('wallbox2')!;
-  if (p.has('batteryLoad')) inp.batteryLoad.value = p.get('batteryLoad')!;
+  if (p.has('consumer1')) inp.consumer1.value = p.get('consumer1')!;
+  if (p.has('consumer2')) inp.consumer2.value = p.get('consumer2')!;
+  if (p.has('consumer3')) inp.consumer3.value = p.get('consumer3')!;
+  if (p.has('consumer4')) inp.consumer4.value = p.get('consumer4')!;
+  if (p.has('batteryLoad1')) inp.batteryLoad1.value = p.get('batteryLoad1')!;
   if (p.has('batteryLoad2')) inp.batteryLoad2.value = p.get('batteryLoad2')!;
   if (p.has('speed')) {
     speedInp.value = p.get('speed')!;

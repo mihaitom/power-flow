@@ -75,29 +75,29 @@ describe('computeFlowAllocation — default topology, no direct loads', () => {
     });
   });
 
-  it('is unaffected by wallbox/wallbox2 — they are already included in `load`', () => {
-    const withoutWallbox = allocate({ solar: 3000, load: 8000, battery: 1000, grid: 0 });
-    const withWallbox = allocate({
+  it('is unaffected by consumer1/consumer2 — they are already included in `load`', () => {
+    const withoutConsumers = allocate({ solar: 3000, load: 8000, battery: 1000, grid: 0 });
+    const withConsumers = allocate({
       solar: 3000,
       load: 8000,
       battery: 1000,
       grid: 0,
-      wallbox: 6400,
-      wallbox2: 300,
+      consumer1: 6400,
+      consumer2: 300,
     });
-    expect(withWallbox).toEqual(withoutWallbox);
+    expect(withConsumers).toEqual(withoutConsumers);
   });
 });
 
-describe('computeFlowAllocation — batteryLoad/batteryLoad2 (direct battery ports)', () => {
+describe('computeFlowAllocation — batteryLoad1/batteryLoad2 (direct battery ports)', () => {
   it('subtracts direct loads from discharge before the house/grid split', () => {
-    // "Battery-fed AC": solar 0, load 900, battery discharging 2200, batteryLoad 1400.
+    // "Battery-fed AC": solar 0, load 900, battery discharging 2200, batteryLoad1 1400.
     const r = allocate({
       solar: 0,
       load: 900,
       battery: 2200,
       grid: 0,
-      batteryLoad: 1400,
+      batteryLoad1: 1400,
     });
     expect(r.batToHome).toBe(800);
     expect(r.batToGrid).toBe(0);
@@ -111,7 +111,7 @@ describe('computeFlowAllocation — batteryLoad/batteryLoad2 (direct battery por
       load: 900,
       battery: 2600,
       grid: 0,
-      batteryLoad: 1000,
+      batteryLoad1: 1000,
       batteryLoad2: 900,
     });
     expect(r.batToHome).toBe(700);
@@ -129,7 +129,7 @@ describe('computeFlowAllocation — batteryLoad/batteryLoad2 (direct battery por
         load: 3600,
         battery: -100,
         grid: 4250,
-        batteryLoad: 300,
+        batteryLoad1: 300,
         batteryLoad2: 850,
       },
       { ...ALL_ON, solarToHome: false, solarToGrid: false },
@@ -149,7 +149,7 @@ describe('computeFlowAllocation — batteryLoad/batteryLoad2 (direct battery por
       load: 900,
       battery: 500,
       grid: 1100,
-      batteryLoad: 400,
+      batteryLoad1: 400,
       batteryLoad2: 300,
     });
     expect(r.gridToBattery).toBe(200);
@@ -164,7 +164,7 @@ describe('computeFlowAllocation — batteryLoad/batteryLoad2 (direct battery por
       load: 1000,
       battery: -300,
       grid: 0,
-      batteryLoad: 0,
+      batteryLoad1: 0,
       batteryLoad2: 0,
     });
     const withoutField = allocate({ solar: 200, load: 1000, battery: -300, grid: 0 });
@@ -192,9 +192,9 @@ describe('computeFlowAllocation — topology restrictions', () => {
 
   it('combines the solar-forced-through-battery case with a direct battery load', () => {
     // "Balcony PV + battery-fed AC": solar 600 (forced fully into the
-    // battery), battery nets -100W (charging), batteryLoad 300W.
+    // battery), battery nets -100W (charging), batteryLoad1 300W.
     const r = allocate(
-      { solar: 600, load: 800, battery: -100, grid: 0, batteryLoad: 300 },
+      { solar: 600, load: 800, battery: -100, grid: 0, batteryLoad1: 300 },
       { ...ALL_ON, solarToHome: false, solarToGrid: false },
     );
     expect(r.solarToBattery).toBe(600);

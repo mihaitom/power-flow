@@ -10,17 +10,31 @@ export interface FlowData {
   battery?: number | null;
   /** Battery state of charge in percent (0–100). */
   batterySoc?: number | null;
-  /** Wallbox / EV charger consumption (below the house). Omit/null hides the node. */
-  wallbox?: number | null;
-  /** Second wallbox / EV charger consumption (above the house). Omit/null hides the node. */
-  wallbox2?: number | null;
+  /** House consumer 1 (top-left). Omit/null hides the node. A sub-consumer
+   *  of `load` (drawn as a separate leg), not extra load on top. Generic —
+   *  not necessarily an EV charger; use `labels`/`icons` to relabel it for
+   *  whatever appliance it actually is. */
+  consumer1?: number | null;
+  /** House consumer 2 (bottom-left). Omit/null hides the node. A sub-consumer
+   *  of `load`, like `consumer1`.
+   *  Note: `consumer2` shares its position with `batteryLoad2` — if both are
+   *  set at once, a conflict indicator is shown there instead of either
+   *  value; see the "Consumer slot layout" section of the README. */
+  consumer2?: number | null;
+  /** House consumer 3 (top-right). Omit/null hides the node. A
+   *  sub-consumer of `load`, like `consumer1`. */
+  consumer3?: number | null;
+  /** House consumer 4 (bottom-right). Omit/null hides the node. A
+   *  sub-consumer of `load`, like `consumer1`. */
+  consumer4?: number | null;
   /** Load fed directly from a battery output port, bypassing the house circuit
    *  entirely (e.g. an AC unit wired straight to the battery). A sub-consumer
    *  of `battery`'s discharge — already included in it, drawn as a separate
    *  leg, not extra discharge on top. Only shown when `battery` is also set.
    *  Omit/null hides the node. */
-  batteryLoad?: number | null;
-  /** Second battery-fed direct load, structurally identical to `batteryLoad`. */
+  batteryLoad1?: number | null;
+  /** Second battery-fed direct load, structurally identical to `batteryLoad1`.
+   *  Note: shares its position with `consumer2` — see `consumer2` above. */
   batteryLoad2?: number | null;
 }
 
@@ -51,9 +65,11 @@ export interface FlowColors {
   batteryIn: string;
   /** Battery node + dots while discharging (energy out of the battery). */
   batteryOut: string;
-  wallbox: string;
-  wallbox2: string;
-  batteryLoad: string;
+  consumer1: string;
+  consumer2: string;
+  consumer3: string;
+  consumer4: string;
+  batteryLoad1: string;
   batteryLoad2: string;
 }
 
@@ -63,9 +79,11 @@ export interface FlowLabels {
   grid: string;
   home: string;
   battery: string;
-  wallbox: string;
-  wallbox2: string;
-  batteryLoad: string;
+  consumer1: string;
+  consumer2: string;
+  consumer3: string;
+  consumer4: string;
+  batteryLoad1: string;
   batteryLoad2: string;
 }
 
@@ -75,9 +93,11 @@ export interface FlowIcons {
   grid: string;
   home: string;
   battery: string;
-  wallbox: string;
-  wallbox2: string;
-  batteryLoad: string;
+  consumer1: string;
+  consumer2: string;
+  consumer3: string;
+  consumer4: string;
+  batteryLoad1: string;
   batteryLoad2: string;
 }
 

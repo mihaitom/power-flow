@@ -19,9 +19,11 @@ const ids = [
   'load',
   'battery',
   'soc',
-  'wallbox',
-  'wallbox2',
-  'batteryLoad',
+  'consumer1',
+  'consumer2',
+  'consumer3',
+  'consumer4',
+  'batteryLoad1',
   'batteryLoad2',
 ];
 export const inp = Object.fromEntries(
@@ -30,9 +32,11 @@ export const inp = Object.fromEntries(
 
 export const hasSolar = document.getElementById('has-solar') as HTMLInputElement;
 export const hasBat = document.getElementById('has-battery') as HTMLInputElement;
-export const hasWb = document.getElementById('has-wallbox') as HTMLInputElement;
-export const hasWb2 = document.getElementById('has-wallbox2') as HTMLInputElement;
-export const hasBl = document.getElementById('has-batteryLoad') as HTMLInputElement;
+export const hasC1 = document.getElementById('has-consumer1') as HTMLInputElement;
+export const hasC2 = document.getElementById('has-consumer2') as HTMLInputElement;
+export const hasC3 = document.getElementById('has-consumer3') as HTMLInputElement;
+export const hasC4 = document.getElementById('has-consumer4') as HTMLInputElement;
+export const hasBl1 = document.getElementById('has-batteryLoad1') as HTMLInputElement;
 export const hasBl2 = document.getElementById('has-batteryLoad2') as HTMLInputElement;
 
 export const topoInp = Object.fromEntries(

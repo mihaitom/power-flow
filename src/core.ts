@@ -39,6 +39,11 @@ function tint(color: string): string {
  * shadow root attached to the given host element, so its styles never leak.
  */
 export class PowerFlow {
+  // Fixed color for the consumer2/batteryLoad2 slot-conflict indicator — not
+  // themable via FlowColors, since it signals a data misconfiguration
+  // rather than a flow.
+  private static readonly CONFLICT_COLOR = '#ef4444';
+
   private root: ShadowRoot;
   private svg!: SVGSVGElement;
   private el: Record<string, Element> = {};
@@ -47,6 +52,10 @@ export class PowerFlow {
   private icons: FlowIcons = { ...DEFAULT_ICONS };
   private topology: FlowTopology = DEFAULT_TOPOLOGY;
   private speedScale = 1;
+  // Tracks whether the consumer2/batteryLoad2 slot conflict was already active
+  // last render, so the console warning fires once per transition into the
+  // conflicting state rather than on every `update()` call.
+  private hadSlotConflict = false;
 
   // Per-dot animation state. We drive the dots ourselves (requestAnimationFrame)
   // instead of SMIL so a speed change keeps each dot's position continuous —
@@ -152,26 +161,43 @@ export class PowerFlow {
     this.setIconPath('grid-icon', icons.grid);
     this.setIconPath('home-icon', icons.home);
     this.setIconPath('bat-icon', icons.battery);
-    this.setIconPath('wb-icon', icons.wallbox);
-    this.setIconPath('wb4-icon', icons.wallbox);
-    this.setIconPath('wb2-icon', icons.wallbox2);
-    this.setIconPath('bl-icon', icons.batteryLoad);
+    this.setIconPath('c1-icon', icons.consumer1);
+    this.setIconPath('c2-icon', icons.consumer2);
+    this.setIconPath('c3-icon', icons.consumer3);
+    this.setIconPath('c4-icon', icons.consumer4);
+    this.setIconPath('bl1-icon', icons.batteryLoad1);
     this.setIconPath('bl2-icon', icons.batteryLoad2);
 
     const solarWatts = data.solar ?? 0;
     const gridWatts = data.grid ?? 0;
     const loadWatts = data.load ?? 0;
     const batteryWatts = data.battery ?? 0;
-    const wallboxWatts = data.wallbox ?? 0;
-    const wallbox2Watts = data.wallbox2 ?? 0;
-    const batteryLoadWatts = data.batteryLoad ?? 0;
+    const consumer1Watts = data.consumer1 ?? 0;
+    const consumer2Watts = data.consumer2 ?? 0;
+    const consumer3Watts = data.consumer3 ?? 0;
+    const consumer4Watts = data.consumer4 ?? 0;
+    const batteryLoad1Watts = data.batteryLoad1 ?? 0;
     const batteryLoad2Watts = data.batteryLoad2 ?? 0;
     const hasSolar = data.solar != null;
     const hasBattery = data.battery != null;
-    const hasWallbox = data.wallbox != null;
-    const hasWallbox2 = data.wallbox2 != null;
-    const hasBatteryLoad = data.batteryLoad != null;
+    const hasConsumer1 = data.consumer1 != null;
+    const hasConsumer2 = data.consumer2 != null;
+    const hasConsumer3 = data.consumer3 != null;
+    const hasConsumer4 = data.consumer4 != null;
+    const hasBatteryLoad = data.batteryLoad1 != null;
     const hasBatteryLoad2 = data.batteryLoad2 != null;
+    // consumer2 and batteryLoad2 share the same physical position (345,310) —
+    // if a caller sets both at once, we can't render both without one
+    // silently overlapping the other or moving somewhere unrelated, so a
+    // conflict indicator is shown there instead of either value (see the
+    // "Consumer slot layout" section of the README).
+    const hasSlotConflict = hasConsumer2 && hasBattery && hasBatteryLoad2;
+    if (hasSlotConflict && !this.hadSlotConflict) {
+      console.warn(
+        '[powerflow] `consumer2` and `batteryLoad2` cannot both be set — they share the same node position. Showing a conflict indicator instead of either value.',
+      );
+    }
+    this.hadSlotConflict = hasSlotConflict;
 
     // ── Flow allocation ──────────────────────────────────────────────
     // See `computeFlowAllocation` for the full priority rationale (also
@@ -189,22 +215,18 @@ export class PowerFlow {
     } = computeFlowAllocation(data, topo);
     const load = Math.max(loadWatts, 0);
 
-    // ViewBox: include the top row (solar / wallbox 2, edge y=8) and/or the
-    // bottom row (battery / wallbox / batteryLoad / batteryLoad2, edge y=362)
-    // only when something occupies it, with an 8px margin. Absent rows are
-    // trimmed so the diagram never has a large empty band — e.g.
-    // grid+home+battery starts at the middle row.
-    //
-    // batteryLoad and batteryLoad2 always have a permanent slot in the
-    // bottom row — never a new row. If wallbox would otherwise collide with
-    // batteryLoad2's slot (345,310), wallbox moves to a 4th column (490,310)
-    // instead, widening the viewBox rather than heightening it.
-    const hasTop = hasSolar || hasWallbox2;
-    const hasBottom = hasBattery || hasWallbox;
-    const wallboxNeedsColumn4 = hasWallbox && hasBattery && hasBatteryLoad2;
+    // ViewBox: include the top row (solar / consumer1 / consumer3, edge y=8)
+    // and/or the bottom row (battery / consumer2 / consumer4 / batteryLoad1 /
+    // batteryLoad2, edge y=362) only when something occupies it, with an 8px
+    // margin. Absent rows are trimmed so the diagram never has a large empty
+    // band — e.g. grid+home+battery starts at the middle row. The 4th
+    // column (consumer3/consumer4, at x=490) only widens the viewBox when
+    // actually used.
+    const hasTop = hasSolar || hasConsumer1 || hasConsumer3;
+    const hasBottom = hasBattery || hasConsumer2 || hasConsumer4;
     const minY = hasTop ? 0 : 125; // middle row (cy 185, edge 133) − 8 margin
     const maxY = hasBottom ? 370 : 245; // battery edge 362 + 8 / home edge 237 + 8
-    const width = wallboxNeedsColumn4 ? 545 : 400; // 4th column edge 542 (490+52) + 3, matching the existing 400 = 397 (345+52) + 3
+    const width = hasConsumer3 || hasConsumer4 ? 545 : 400; // 4th column edge 542 (490+52) + 3, matching the existing 400 = 397 (345+52) + 3
     const height = maxY - minY;
     this.svg.setAttribute('viewBox', `0 ${minY} ${width} ${height}`);
 
@@ -221,25 +243,29 @@ export class PowerFlow {
     style.setProperty('--sfd-solar', colors.solar);
     style.setProperty('--sfd-grid-in', colors.gridIn);
     style.setProperty('--sfd-battery-out', colors.batteryOut);
-    style.setProperty('--sfd-wallbox', colors.wallbox);
-    style.setProperty('--sfd-wallbox2', colors.wallbox2);
-    style.setProperty('--sfd-battery-load', colors.batteryLoad);
+    style.setProperty('--sfd-consumer1', colors.consumer1);
+    style.setProperty('--sfd-consumer2', colors.consumer2);
+    style.setProperty('--sfd-consumer3', colors.consumer3);
+    style.setProperty('--sfd-consumer4', colors.consumer4);
+    style.setProperty('--sfd-battery-load1', colors.batteryLoad1);
     style.setProperty('--sfd-battery-load2', colors.batteryLoad2);
 
     // Topology: show/hide the optional nodes (each tagged with a matching
     // data-topo attribute).
     this.setTopo('solar', hasSolar);
     this.setTopo('battery', hasBattery);
-    // batteryLoad/batteryLoad2 are sub-consumers of the battery's discharge,
+    // batteryLoad1/batteryLoad2 are sub-consumers of the battery's discharge,
     // so they're meaningless (and hidden) without a battery, even if a
-    // caller sets a batteryLoad value without a battery value.
-    this.setTopo('batteryLoad', hasBattery && hasBatteryLoad);
-    this.setTopo('batteryLoad2', hasBattery && hasBatteryLoad2);
-    // Wallbox normally sits at (345,310); it yields that slot to batteryLoad2
-    // and moves to a 4th column instead when both are active.
-    this.setTopo('wallbox', hasWallbox && !wallboxNeedsColumn4);
-    this.setTopo('wallbox4', wallboxNeedsColumn4);
-    this.setTopo('wallbox2', hasWallbox2);
+    // caller sets a batteryLoad1 value without a battery value. batteryLoad2
+    // additionally hides during a slot conflict (see hasSlotConflict above).
+    this.setTopo('batteryLoad1', hasBattery && hasBatteryLoad);
+    this.setTopo('batteryLoad2', hasBattery && hasBatteryLoad2 && !hasSlotConflict);
+    // consumer2 hides during a slot conflict too — see hasSlotConflict above.
+    this.setTopo('consumer1', hasConsumer1);
+    this.setTopo('consumer2', hasConsumer2 && !hasSlotConflict);
+    this.setTopo('consumer3', hasConsumer3);
+    this.setTopo('consumer4', hasConsumer4);
+    this.setTopo('slotConflict', hasSlotConflict);
 
     // Edges: the five built-in connections gated by FlowTopology combine node
     // presence with the matching topology flag.
@@ -261,28 +287,33 @@ export class PowerFlow {
     this.setDot('solar-bat', hasBattery && solarToBattery > 0, solarToBattery);
     this.setDot('grid-bat', hasBattery && gridToBattery > 0, gridToBattery);
     this.setDot(
-      'home-wallbox',
-      hasWallbox && !wallboxNeedsColumn4 && wallboxWatts > 0,
-      wallboxWatts,
+      'home-consumer1',
+      hasConsumer1 && consumer1Watts > 0,
+      consumer1Watts,
     );
     this.setDot(
-      'home-wallbox4',
-      wallboxNeedsColumn4 && wallboxWatts > 0,
-      wallboxWatts,
+      'home-consumer2',
+      hasConsumer2 && !hasSlotConflict && consumer2Watts > 0,
+      consumer2Watts,
     );
     this.setDot(
-      'home-wallbox2',
-      hasWallbox2 && wallbox2Watts > 0,
-      wallbox2Watts,
+      'home-consumer3',
+      hasConsumer3 && consumer3Watts > 0,
+      consumer3Watts,
     );
     this.setDot(
-      'bat-batteryload',
-      hasBattery && hasBatteryLoad && batteryLoadWatts > 0,
-      batteryLoadWatts,
+      'home-consumer4',
+      hasConsumer4 && consumer4Watts > 0,
+      consumer4Watts,
+    );
+    this.setDot(
+      'bat-batteryload1',
+      hasBattery && hasBatteryLoad && batteryLoad1Watts > 0,
+      batteryLoad1Watts,
     );
     this.setDot(
       'bat-batteryload2',
-      hasBattery && hasBatteryLoad2 && batteryLoad2Watts > 0,
+      hasBattery && hasBatteryLoad2 && !hasSlotConflict && batteryLoad2Watts > 0,
       batteryLoad2Watts,
     );
 
@@ -377,42 +408,54 @@ export class PowerFlow {
       socArc.style.strokeDasharray = `${pct * ARC_LENGTH} ${ARC_LENGTH}`;
     }
 
-    // ── Wallbox node — render both static variants (default + 4th-column
-    // fallback); setTopo above decides which one is actually visible. ──
-    if (hasWallbox) {
-      this.el['n-wallbox'].classList.toggle('dim', wallboxWatts === 0);
-      this.fill('wb-bg', tint(colors.wallbox));
-      this.stroke('wb-ring', colors.wallbox);
-      this.fill('wb-icon', colors.wallbox);
-      this.text('t-wb-val', formatWatts(wallboxWatts));
-      this.labelText('t-wb-lbl', labels.wallbox);
-
-      this.el['n-wallbox4'].classList.toggle('dim', wallboxWatts === 0);
-      this.fill('wb4-bg', tint(colors.wallbox));
-      this.stroke('wb4-ring', colors.wallbox);
-      this.fill('wb4-icon', colors.wallbox);
-      this.text('t-wb4-val', formatWatts(wallboxWatts));
-      this.labelText('t-wb4-lbl', labels.wallbox);
+    // ── Consumer 1 node (home consumer, top-left of its 2×2) ──
+    if (hasConsumer1) {
+      this.el['n-consumer1'].classList.toggle('dim', consumer1Watts === 0);
+      this.fill('c1-bg', tint(colors.consumer1));
+      this.stroke('c1-ring', colors.consumer1);
+      this.fill('c1-icon', colors.consumer1);
+      this.text('t-c1-val', formatWatts(consumer1Watts));
+      this.labelText('t-c1-lbl', labels.consumer1);
     }
 
-    // ── Wallbox 2 node (above the house) ──
-    if (hasWallbox2) {
-      this.el['n-wallbox2'].classList.toggle('dim', wallbox2Watts === 0);
-      this.fill('wb2-bg', tint(colors.wallbox2));
-      this.stroke('wb2-ring', colors.wallbox2);
-      this.fill('wb2-icon', colors.wallbox2);
-      this.text('t-wb2-val', formatWatts(wallbox2Watts));
-      this.labelText('t-wb2-lbl', labels.wallbox2);
+    // ── Consumer 2 node (home consumer, bottom-left of its 2×2) ──
+    if (hasConsumer2) {
+      this.el['n-consumer2'].classList.toggle('dim', consumer2Watts === 0);
+      this.fill('c2-bg', tint(colors.consumer2));
+      this.stroke('c2-ring', colors.consumer2);
+      this.fill('c2-icon', colors.consumer2);
+      this.text('t-c2-val', formatWatts(consumer2Watts));
+      this.labelText('t-c2-lbl', labels.consumer2);
+    }
+
+    // ── Consumer 3 node (home consumer, top-right of its 2×2) ──
+    if (hasConsumer3) {
+      this.el['n-consumer3'].classList.toggle('dim', consumer3Watts === 0);
+      this.fill('c3-bg', tint(colors.consumer3));
+      this.stroke('c3-ring', colors.consumer3);
+      this.fill('c3-icon', colors.consumer3);
+      this.text('t-c3-val', formatWatts(consumer3Watts));
+      this.labelText('t-c3-lbl', labels.consumer3);
+    }
+
+    // ── Consumer 4 node (home consumer, bottom-right of its 2×2) ──
+    if (hasConsumer4) {
+      this.el['n-consumer4'].classList.toggle('dim', consumer4Watts === 0);
+      this.fill('c4-bg', tint(colors.consumer4));
+      this.stroke('c4-ring', colors.consumer4);
+      this.fill('c4-icon', colors.consumer4);
+      this.text('t-c4-val', formatWatts(consumer4Watts));
+      this.labelText('t-c4-lbl', labels.consumer4);
     }
 
     // ── Battery load 1 node ──
     if (hasBatteryLoad) {
-      this.el['n-batteryload'].classList.toggle('dim', batteryLoadWatts === 0);
-      this.fill('bl-bg', tint(colors.batteryLoad));
-      this.stroke('bl-ring', colors.batteryLoad);
-      this.fill('bl-icon', colors.batteryLoad);
-      this.text('t-bl-val', formatWatts(batteryLoadWatts));
-      this.labelText('t-bl-lbl', labels.batteryLoad);
+      this.el['n-batteryload1'].classList.toggle('dim', batteryLoad1Watts === 0);
+      this.fill('bl1-bg', tint(colors.batteryLoad1));
+      this.stroke('bl1-ring', colors.batteryLoad1);
+      this.fill('bl1-icon', colors.batteryLoad1);
+      this.text('t-bl1-val', formatWatts(batteryLoad1Watts));
+      this.labelText('t-bl1-lbl', labels.batteryLoad1);
     }
 
     // ── Battery load 2 node ──
@@ -426,6 +469,14 @@ export class PowerFlow {
       this.fill('bl2-icon', colors.batteryLoad2);
       this.text('t-bl2-val', formatWatts(batteryLoad2Watts));
       this.labelText('t-bl2-lbl', labels.batteryLoad2);
+    }
+
+    // ── Slot conflict indicator — fixed colors, not user-configurable, since
+    // it signals a data misconfiguration rather than a themable flow. ──
+    if (hasSlotConflict) {
+      this.fill('conflict-bg', tint(PowerFlow.CONFLICT_COLOR));
+      this.stroke('conflict-ring', PowerFlow.CONFLICT_COLOR);
+      this.fill('conflict-icon', PowerFlow.CONFLICT_COLOR);
     }
   }
 
@@ -443,7 +494,7 @@ export class PowerFlow {
   // ── helpers ──
 
   // Show/hide every element belonging to an optional node (its node group and,
-  // for wallbox/wallbox2/batteryLoad/batteryLoad2, its non-configurable track
+  // for consumer1/consumer2/batteryLoad1/batteryLoad2, its non-configurable track
   // share the same data-topo key).
   private setTopo(key: string, visible: boolean) {
     this.svg

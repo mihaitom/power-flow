@@ -2,9 +2,11 @@ import {
   inp,
   hasSolar,
   hasBat,
-  hasWb,
-  hasWb2,
-  hasBl,
+  hasC1,
+  hasC2,
+  hasC3,
+  hasC4,
+  hasBl1,
   hasBl2,
   topoInp,
   TOPOLOGY_KEYS,
@@ -19,13 +21,16 @@ interface TestCase {
   solar: number | null;
   load: number;
   battery: number | null;
-  wallbox: number | null;
-  wallbox2: number | null;
-  batteryLoad: number | null;
+  batterySoc?: number | null;
+  consumer1: number | null;
+  consumer2: number | null;
+  consumer3: number | null;
+  consumer4: number | null;
+  batteryLoad1: number | null;
   batteryLoad2: number | null;
   topology?: Partial<Record<TopologyKey, boolean>>;
   // Overrides the auto-computed grid value (load - solar - battery +
-  // batteryLoad + batteryLoad2). Only needed for cases where a disabled
+  // batteryLoad1 + batteryLoad2). Only needed for cases where a disabled
   // topology edge curtails power the naive formula doesn't know about, so
   // the demo's grid reading stays physically consistent with what's drawn.
   gridOverride?: number;
@@ -39,9 +44,11 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: 5000,
         load: 1500,
         battery: -1500,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
@@ -49,9 +56,11 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: 6000,
         load: 1200,
         battery: null,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
@@ -59,9 +68,11 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: 2000,
         load: 2000,
         battery: null,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
@@ -69,9 +80,11 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: 400,
         load: 1800,
         battery: null,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
@@ -79,9 +92,12 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: 4000,
         load: 1000,
         battery: 0,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        batterySoc: 100,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
@@ -89,9 +105,11 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: 800,
         load: 2100,
         battery: 1200,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
     ],
@@ -104,9 +122,11 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: 0,
         load: 2000,
         battery: 800,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
@@ -114,9 +134,11 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: 0,
         load: 1000,
         battery: -500,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
@@ -124,9 +146,11 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: 0,
         load: 800,
         battery: 1800,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
@@ -134,9 +158,12 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: null,
         load: 1200,
         battery: 0,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        batterySoc: 100,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
@@ -144,9 +171,12 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: null,
         load: 3000,
         battery: 900,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        batterySoc: 8,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
@@ -154,9 +184,11 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: null,
         load: 600,
         battery: -3000,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
     ],
@@ -169,9 +201,11 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: null,
         load: 1500,
         battery: null,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
@@ -179,9 +213,11 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: null,
         load: 3800,
         battery: null,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
@@ -189,149 +225,147 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         solar: null,
         load: 250,
         battery: null,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
     ],
   },
   {
-    name: 'Wallbox / EV charging',
+    // Consumer slots are generic (whatever the appliance shuffle picked —
+    // a dishwasher, a freezer, ...), not necessarily EV chargers, so these
+    // cases are framed around "how many slots" and "what's powering them"
+    // rather than any specific appliance.
+    name: 'Home consumers (1–4)',
     cases: [
       {
-        label: 'Solar + EV',
-        solar: 8000,
-        load: 7000,
+        label: 'Single consumer, grid-only',
+        solar: null,
+        load: 2200,
         battery: null,
-        wallbox: 6400,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: 1800,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
-        label: '2 EVs',
-        solar: 3000,
-        load: 8000,
-        battery: 1000,
-        wallbox: 6400,
-        wallbox2: 300,
-        batteryLoad: null,
-        batteryLoad2: null,
-      },
-      {
-        label: 'Night EV',
+        label: 'Single consumer at night, battery assists',
         solar: 0,
         load: 3000,
         battery: 500,
-        wallbox: 2200,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: 2200,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
-        label: 'EV fully solar-powered',
-        solar: 7000,
-        load: 6400,
+        label: 'Two consumers, solar-covered',
+        solar: 8000,
+        load: 7000,
         battery: null,
-        wallbox: 6400,
-        wallbox2: null,
-        batteryLoad: null,
+        consumer1: 4000,
+        consumer2: 2000,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
       {
-        label: 'Wallbox only, no solar/battery',
-        solar: null,
-        load: 7200,
-        battery: null,
-        wallbox: 6900,
-        wallbox2: null,
-        batteryLoad: null,
-        batteryLoad2: null,
-      },
-      {
-        label: 'Both wallboxes maxed',
+        label: 'Two large consumers, grid-only',
         solar: null,
         load: 17500,
         battery: null,
-        wallbox: 9000,
-        wallbox2: 8000,
-        batteryLoad: null,
+        consumer1: 9000,
+        consumer2: 8000,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
+        batteryLoad2: null,
+      },
+      {
+        label: 'All four consumers',
+        solar: 6000,
+        load: 8200,
+        battery: null,
+        consumer1: 3000,
+        consumer2: 1200,
+        consumer3: 900,
+        consumer4: 1600,
+        batteryLoad1: null,
+        batteryLoad2: null,
+      },
+      {
+        label: 'Consumers + battery, midday',
+        solar: 6000,
+        load: 9500,
+        battery: 1500,
+        consumer1: 4000,
+        consumer2: 1500,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
+        batteryLoad2: null,
+      },
+      {
+        label: 'Consumers + night battery discharge',
+        solar: 0,
+        load: 8500,
+        battery: 2000,
+        consumer1: 5000,
+        consumer2: 1000,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
       },
     ],
   },
   {
-    name: 'Balcony PV & battery ports',
+    name: 'Battery-fed loads (1–2)',
     cases: [
       {
-        label: 'Balcony PV (battery-only)',
-        solar: 600,
-        load: 900,
-        battery: -300,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
-        batteryLoad2: null,
-        topology: { solarToHome: false, solarToGrid: false },
-      },
-      {
-        label: 'Battery-fed AC',
+        label: 'Single battery-fed load',
         solar: 0,
         load: 900,
         battery: 2200,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: 1400,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: 1400,
         batteryLoad2: null,
       },
       {
-        label: 'Dual battery-fed loads',
+        label: 'Two battery-fed loads',
         solar: 0,
         load: 900,
         battery: 2600,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: 1000,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: 1000,
         batteryLoad2: 900,
       },
       {
-        label: 'Balcony PV + battery-fed AC',
-        solar: 600,
-        load: 800,
-        battery: -100,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: 300,
-        batteryLoad2: null,
-        topology: { solarToHome: false, solarToGrid: false },
-      },
-      {
-        label: 'No grid export allowed (curtailed)',
-        solar: 5000,
-        load: 1500,
-        battery: -1000,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: null,
-        batteryLoad2: null,
-        topology: { solarToGrid: false, batteryToGrid: false },
-        // The naive load−solar−battery formula would show a 2.5kW export
-        // that's actually curtailed (solar has nowhere left to go once the
-        // battery and house are both saturated and export is disabled) — the
-        // true grid reading here is 0.
-        gridOverride: 0,
-      },
-      {
-        label: 'Battery ports exceed discharge (grid tops up)',
+        label: 'Battery loads exceed reported discharge',
         solar: null,
         load: 900,
         battery: 500,
-        wallbox: null,
-        wallbox2: null,
-        batteryLoad: 400,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: 400,
         batteryLoad2: 300,
-        // batteryLoad + batteryLoad2 (700W) exceed the battery's reported
+        // batteryLoad1 + batteryLoad2 (700W) exceed the battery's reported
         // 500W discharge — since `battery` is only a net reading, the grid
         // must be simultaneously topping the battery up by 200W (700W out
         // to the direct loads, 200W in from the grid, netting to the
@@ -340,27 +374,71 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
     ],
   },
   {
-    name: 'Mixed scenarios',
+    name: 'Topology',
     cases: [
       {
-        label: 'Full house, midday',
-        solar: 6000,
-        load: 9500,
-        battery: 1500,
-        wallbox: 4000,
-        wallbox2: 1500,
-        batteryLoad: null,
+        label: 'Balcony PV (battery-only)',
+        solar: 600,
+        load: 900,
+        battery: -300,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
         batteryLoad2: null,
+        topology: { solarToHome: false, solarToGrid: false },
       },
       {
-        label: 'Full house, night charging',
-        solar: 0,
-        load: 8500,
-        battery: 2000,
-        wallbox: 5000,
-        wallbox2: 1000,
-        batteryLoad: null,
+        label: 'Balcony PV + battery-fed load',
+        solar: 600,
+        load: 800,
+        battery: -100,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: 300,
         batteryLoad2: null,
+        topology: { solarToHome: false, solarToGrid: false },
+      },
+      {
+        label: 'No grid export allowed (curtailed)',
+        solar: 5000,
+        load: 1500,
+        battery: -1000,
+        consumer1: null,
+        consumer2: null,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
+        batteryLoad2: null,
+        topology: { solarToGrid: false, batteryToGrid: false },
+        // The naive load−solar−battery formula would show a 2.5kW export
+        // that's actually curtailed (solar has nowhere left to go once the
+        // battery and house are both saturated and export is disabled) — the
+        // true grid reading here is 0.
+        gridOverride: 0,
+      },
+    ],
+  },
+  {
+    name: 'Slot conflict (3,3)',
+    cases: [
+      {
+        label: 'Slot conflict at (3,3)',
+        solar: null,
+        load: 2500,
+        battery: 1800,
+        consumer1: null,
+        consumer2: 900,
+        consumer3: null,
+        consumer4: null,
+        batteryLoad1: null,
+        // `consumer2` and `batteryLoad2` share the same grid position (3,3) —
+        // setting both at once demonstrates the red conflict indicator
+        // (see core.ts's hasSlotConflict) instead of either value drawing.
+        batteryLoad2: 700,
       },
     ],
   },
@@ -370,22 +448,27 @@ function selectTestCase(tc: TestCase) {
   stopSim();
   hasSolar.checked = tc.solar !== null;
   hasBat.checked = tc.battery !== null;
-  hasWb.checked = tc.wallbox !== null;
-  hasWb2.checked = tc.wallbox2 !== null;
-  hasBl.checked = tc.batteryLoad !== null;
+  hasC1.checked = tc.consumer1 !== null;
+  hasC2.checked = tc.consumer2 !== null;
+  hasC3.checked = tc.consumer3 !== null;
+  hasC4.checked = tc.consumer4 !== null;
+  hasBl1.checked = tc.batteryLoad1 !== null;
   hasBl2.checked = tc.batteryLoad2 !== null;
   inp.solar.value = String(tc.solar ?? 0);
   inp.battery.value = String(tc.battery ?? 0);
-  inp.wallbox.value = String(tc.wallbox ?? 0);
-  inp.wallbox2.value = String(tc.wallbox2 ?? 0);
-  inp.batteryLoad.value = String(tc.batteryLoad ?? 0);
+  inp.soc.value = String(tc.batterySoc ?? 69);
+  inp.consumer1.value = String(tc.consumer1 ?? 0);
+  inp.consumer2.value = String(tc.consumer2 ?? 0);
+  inp.consumer3.value = String(tc.consumer3 ?? 0);
+  inp.consumer4.value = String(tc.consumer4 ?? 0);
+  inp.batteryLoad1.value = String(tc.batteryLoad1 ?? 0);
   inp.batteryLoad2.value = String(tc.batteryLoad2 ?? 0);
   for (const k of TOPOLOGY_KEYS) topoInp[k].checked = tc.topology?.[k] ?? true;
   updateLoadMin();
   inp.load.value = String(tc.load);
   updateGrid();
   // A few cases involve a disabled topology edge that curtails power the
-  // naive load−solar−battery(+batteryLoad+batteryLoad2) formula can't see —
+  // naive load−solar−battery(+batteryLoad1+batteryLoad2) formula can't see —
   // updateGrid()'s auto-computed value is overridden with the true reading.
   if (tc.gridOverride !== undefined) {
     inp.grid.value = String(tc.gridOverride);
