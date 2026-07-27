@@ -138,7 +138,6 @@ btn.addEventListener('click', () => {
     simTimeEl.textContent = `${String(Math.floor(hour)).padStart(2, '0')}:${String(Math.round((hour % 1) * 60)).padStart(2, '0')}`;
 
     step = (step + 1) % STEPS_PER_DAY;
-    if (step === 0) soc = 30; // new day starts partially depleted from the night
   }, TICK_MS);
 });
 

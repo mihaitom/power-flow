@@ -20,6 +20,14 @@ consumer slots** — with dots whose speed is proportional to the actual power.
 
 [**▶ Try the live playground**](https://mihaitom.github.io/power-flow-diagram/)
 
+<br />
+
+<img src="https://raw.githubusercontent.com/mihaitom/power-flow-diagram/main/docs/preview-outline.gif" alt="powerflow — outline node style, showing all four consumer slots plus a battery-fed load at once" width="320" />
+<img src="https://raw.githubusercontent.com/mihaitom/power-flow-diagram/main/docs/preview-filled.gif" alt="powerflow — filled node style, a balcony PV setup wired to charge only the battery" width="320" />
+<img src="https://raw.githubusercontent.com/mihaitom/power-flow-diagram/main/docs/preview-tonal.gif" alt="powerflow — tonal node style with full-size background icons and arrowhead flow dots" width="320" />
+
+<sub>Same component, four looks — <code>soft</code> (above), <code>outline</code>, <code>filled</code>, <code>tonal</code> — all just an <a href="#nodestyle"><code>options.nodeStyle</code></a> away. The examples also show off the data side: the outline diagram's extra column only appears because that scenario actually uses <code>consumer3</code>/<code>consumer4</code>, the filled one is a balcony-PV <a href="#flowtopology"><code>topology</code></a> where solar can only reach the battery, and the tonal one adds <a href="#iconstyle"><code>iconStyle: 'full'</code></a> and <a href="#dotshape"><code>dotShape: 'triangle'</code></a> on top.</sub>
+
 </div>
 
 ---
@@ -433,7 +441,8 @@ npm run build         # build:lib + build:site
 npm run build:lib     # → dist/      publishable library (JS bundles + .d.ts)
 npm run build:site    # → dist-site/ static playground (GitHub Pages)
 
-npm run capture:gif   # re-generate docs/preview.gif (requires ffmpeg + chromium)
+npm run capture:gif   # re-generate all docs/preview*.gif shown above (requires ffmpeg + chromium)
+                        # -- --test "<label>" --node-style <style> --out <path>  for a one-off capture
 ```
 
 ## Credits

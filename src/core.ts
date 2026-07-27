@@ -814,10 +814,18 @@ export class PowerFlow {
   // Show/hide a dot and set its speed. Only the speed changes on a value update
   // — the rAF loop keeps the position continuous, so dragging a slider never
   // makes the dot jump back to the start.
+  // `marker`/`shrinkEl` are deliberately *not* captured once up front and
+  // reused in the deferred callbacks below — `activeMarker`/`shrinkTarget`
+  // depend on `this.dotShape`, and a dotShape change (swapDotShape()) can
+  // land while a dot is mid-shrink (the 200ms hideTimer, or even the pop-in
+  // rAF, hasn't fired yet). A stale closure would then hide/unshrink the
+  // *old* shape's element while swapDotShape has already switched the new
+  // shape's element to visible, leaving that one stuck on-screen forever at
+  // its last position — visible but attached to no active track. Each
+  // callback re-resolves the marker/shrink target at fire time instead, so
+  // it always acts on whatever shape is current by then.
   private setDot(id: string, visible: boolean, watts: number) {
     const s = this.dots[id];
-    const marker = this.activeMarker(s);
-    const shrinkEl = this.shrinkTarget(s);
     if (visible) {
       s.speed = this.flowSpeed(watts, s.length);
       if (!s.visible) {
@@ -826,20 +834,20 @@ export class PowerFlow {
         s.visible = true;
         s.shrinking = false;
         this.placeDot(s);
-        shrinkEl.classList.add('shrunk');
-        marker.style.display = '';
+        this.shrinkTarget(s).classList.add('shrunk');
+        this.activeMarker(s).style.display = '';
         requestAnimationFrame(() => requestAnimationFrame(() => {
-          if (s.visible) shrinkEl.classList.remove('shrunk');
+          if (s.visible) this.shrinkTarget(s).classList.remove('shrunk');
         }));
       }
     } else if (s.visible) {
       // Shrink out: keep moving while scaling to 0, then hide after the transition.
       s.visible = false;
       s.shrinking = true;
-      shrinkEl.classList.add('shrunk');
+      this.shrinkTarget(s).classList.add('shrunk');
       s.hideTimer = setTimeout(() => {
-        marker.style.display = 'none';
-        shrinkEl.classList.remove('shrunk');
+        this.activeMarker(s).style.display = 'none';
+        this.shrinkTarget(s).classList.remove('shrunk');
         s.shrinking = false;
         s.hideTimer = undefined;
       }, 200);

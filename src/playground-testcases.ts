@@ -302,6 +302,18 @@ const TEST_CATEGORIES: { name: string; cases: TestCase[] }[] = [
         batteryLoad2: null,
       },
       {
+        label: 'All four consumers + battery-fed loads',
+        solar: 9000,
+        load: 8200,
+        battery: -500,
+        consumer1: 3000,
+        consumer2: 1200,
+        consumer3: 900,
+        consumer4: 1600,
+        batteryLoad1: 800,
+        batteryLoad2: null,
+      },
+      {
         label: 'Consumers + battery, midday',
         solar: 6000,
         load: 9500,
