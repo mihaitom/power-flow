@@ -12,6 +12,7 @@ import {
   topoInp,
   TOPOLOGY_KEYS,
   fmt,
+  notifyStateChange,
 } from './playground-dom';
 
 export function apply() {
@@ -76,9 +77,12 @@ export function apply() {
     batteryLoad1: hasBl1.checked ? +inp.batteryLoad1.value : null,
     batteryLoad2: hasBl2.checked ? +inp.batteryLoad2.value : null,
   };
-  el.topology = Object.fromEntries(
-    TOPOLOGY_KEYS.map((k) => [k, topoInp[k].checked]),
-  );
+  el.options = {
+    ...el.options,
+    topology: Object.fromEntries(
+      TOPOLOGY_KEYS.map((k) => [k, topoInp[k].checked]),
+    ),
+  };
 }
 
 Object.values(topoInp).forEach((i) => i.addEventListener('input', apply));
@@ -91,26 +95,44 @@ const vSpeed = document.getElementById('v-speed') as HTMLElement;
 vSpeed.textContent = `${speedInp.value}×`;
 speedInp.addEventListener('input', () => {
   vSpeed.textContent = `${speedInp.value}×`;
-  el.speedScale = Number(speedInp.value);
+  el.options = { ...el.options, speedScale: Number(speedInp.value) };
 });
 export { speedInp, vSpeed };
 
 // ── Appearance ────────────────────────────────────────────────────────────────
+const NODE_STYLES = ['soft', 'tonal', 'outline', 'filled'] as const;
+export let currentNodeStyle: (typeof NODE_STYLES)[number] = 'soft';
+const nodeStyleTabsEl = document.getElementById('node-style-tabs') as HTMLElement;
+export function setNodeStyle(style: (typeof NODE_STYLES)[number]) {
+  currentNodeStyle = style;
+  nodeStyleTabsEl.querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('on', (b as HTMLElement).dataset.nodeStyle === style);
+  });
+  el.options = { ...el.options, nodeStyle: style };
+}
+nodeStyleTabsEl.querySelectorAll('button').forEach((b) => {
+  b.addEventListener('click', () => {
+    setNodeStyle((b as HTMLElement).dataset.nodeStyle as (typeof NODE_STYLES)[number]);
+    notifyStateChange();
+  });
+});
+
 const iconStyleInp = document.getElementById('icon-style-full') as HTMLInputElement;
 iconStyleInp.addEventListener('input', () => {
-  el.iconStyle = iconStyleInp.checked ? 'full' : 'default';
+  el.options = { ...el.options, iconStyle: iconStyleInp.checked ? 'full' : 'default' };
 });
 const dotShapeInp = document.getElementById('dot-shape-triangle') as HTMLInputElement;
 dotShapeInp.addEventListener('input', () => {
-  el.dotShape = dotShapeInp.checked ? 'triangle' : 'circle';
+  el.options = { ...el.options, dotShape: dotShapeInp.checked ? 'triangle' : 'circle' };
 });
 const curveBendInp = document.getElementById('curve-bend') as HTMLInputElement;
 const vCurveBend = document.getElementById('v-curve-bend') as HTMLElement;
 vCurveBend.textContent = `${curveBendInp.value}×`;
 curveBendInp.addEventListener('input', () => {
   vCurveBend.textContent = `${curveBendInp.value}×`;
-  el.curveBend = Number(curveBendInp.value);
+  el.options = { ...el.options, curveBend: Number(curveBendInp.value) };
 });
+export { iconStyleInp, dotShapeInp, curveBendInp, vCurveBend };
 
 // ── Slider logic ──────────────────────────────────────────────────────────────
 const consumer1Inp = document.getElementById('consumer1') as HTMLInputElement;

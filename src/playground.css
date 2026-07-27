@@ -290,7 +290,7 @@ dialog {
   padding: 20px;
   background: var(--card);
   color: var(--fg);
-  width: min(700px, 92vw);
+  width: min(800px, 92vw);
   max-height: 85vh;
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.18),
@@ -306,8 +306,8 @@ dialog::backdrop {
   backdrop-filter: blur(2px);
 }
 .install-section { display: flex; flex-direction: column; gap: 8px; }
-#pm-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
-#pm-tabs button { padding: 4px 10px; font-size: 12px; border-radius: 7px; }
+.chip-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.chip-tabs button { padding: 4px 10px; font-size: 12px; border-radius: 7px; }
 .install-cmd-row {
   display: flex;
   align-items: center;

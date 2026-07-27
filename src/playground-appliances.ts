@@ -89,8 +89,7 @@ function shuffleAppliances() {
     currentIcons[slot] = picks[i].icon;
   });
   currentLabels = labels;
-  el.labels = labels;
-  el.icons = currentIcons;
+  el.options = { ...el.options, labels, icons: currentIcons };
 }
 
 const appliancesBtn = document.getElementById('shuffle-appliances') as HTMLElement;

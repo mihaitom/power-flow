@@ -101,26 +101,44 @@ export interface FlowIcons {
   batteryLoad2: string;
 }
 
-export interface PowerFlowOptions {
-  data: FlowData;
-  colors?: Partial<FlowColors>;
-  labels?: Partial<FlowLabels>;
-  icons?: Partial<FlowIcons>;
-  /** Dot speed multiplier. 1 = default, 2 = twice as fast, 0.5 = half speed. */
-  speedScale?: number;
+/** How a node's background/ring/icon/text are painted:
+ *  - `'soft'` (default) — today's look: a light tint of the accent color as
+ *    background, plus a colored ring.
+ *  - `'tonal'` — an opaque, muted (pastel) fill in the accent color, no ring.
+ *  - `'outline'` — transparent background, just a colored ring.
+ *  - `'filled'` — the node's full accent color as background, icon/text
+ *    switched to light or dark ink (picked per color) for contrast. */
+export type NodeStyle = 'soft' | 'tonal' | 'outline' | 'filled';
+
+/** Everything about the diagram other than the live `data` itself: colors,
+ *  labels, icons, topology, and presentation/behavior tuning knobs. */
+export interface PowerFlowSettings {
+  colors: Partial<FlowColors>;
+  labels: Partial<FlowLabels>;
+  icons: Partial<FlowIcons>;
   /** Enable/disable individual built-in connections. Defaults to all `true`. */
-  topology?: Partial<FlowTopology>;
+  topology: Partial<FlowTopology>;
+  /** Dot speed multiplier. 1 = default, 2 = twice as fast, 0.5 = half speed. */
+  speedScale: number;
+  /** How each node's background/ring/icon/text are painted. Default `'soft'`. */
+  nodeStyle: NodeStyle;
   /** `'full'` draws each node's icon large behind the value/label text
    *  (dimmed, as a background) instead of small above it. Default `'default'`. */
-  iconStyle?: 'default' | 'full';
+  iconStyle: 'default' | 'full';
   /** `'triangle'` draws flow dots as small arrowheads that point in their
    *  direction of travel, instead of plain circles. Default `'circle'`. */
-  dotShape?: 'circle' | 'triangle';
+  dotShape: 'circle' | 'triangle';
   /** Scales the diagram's curved connections by stretching/shrinking how far
    *  each one travels in its fixed departure/arrival direction before
    *  turning. `0` collapses them into direct lines, `1` (the default) is
    *  today's curve, values above `1` hold the straight direction longer with
    *  a sharper turn in between. Clamped to `0–2` internally to keep curves
    *  from crossing neighboring nodes. */
-  curveBend?: number;
+  curveBend: number;
+}
+
+export interface PowerFlowOptions {
+  data: FlowData;
+  /** Colors, labels, icons, topology and presentation tuning — see `PowerFlowSettings`. */
+  options?: Partial<PowerFlowSettings>;
 }

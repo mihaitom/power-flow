@@ -1,11 +1,5 @@
 import { PowerFlow } from './core';
-import type {
-  FlowData,
-  FlowColors,
-  FlowLabels,
-  FlowIcons,
-  FlowTopology,
-} from './types';
+import type { FlowData, PowerFlowSettings } from './types';
 
 /**
  * `<power-flow>` custom element — a framework-agnostic energy-flow diagram.
@@ -14,8 +8,8 @@ import type {
  *
  *   const el = document.querySelector("power-flow");
  *   el.data = { solar: 3200, grid: -800, load: 2400, battery: -1200 };
- *   el.colors = { solar: "#f90" };
- *   el.labels = { home: "Haus" };
+ *   el.options = { colors: { solar: "#f90" }, labels: { home: "Haus" } };
+ *   el.options = { iconStyle: "full", dotShape: "triangle" };
  *
  * For plain HTML you can also pass JSON via attributes:
  *
@@ -23,19 +17,12 @@ import type {
  */
 export class PowerFlowElement extends HTMLElement {
   static get observedAttributes() {
-    return ['data', 'colors', 'labels'];
+    return ['data', 'options'];
   }
 
   private pf: PowerFlow | null = null;
   private _data: FlowData = { solar: 0, grid: 0, load: 0 };
-  private _colors: Partial<FlowColors> | undefined;
-  private _labels: Partial<FlowLabels> | undefined;
-  private _icons: Partial<FlowIcons> | undefined;
-  private _speedScale: number | undefined;
-  private _topology: Partial<FlowTopology> | undefined;
-  private _iconStyle: 'default' | 'full' | undefined;
-  private _dotShape: 'circle' | 'triangle' | undefined;
-  private _curveBend: number | undefined;
+  private _options: Partial<PowerFlowSettings> | undefined;
 
   set data(value: FlowData) {
     this._data = value;
@@ -45,68 +32,12 @@ export class PowerFlowElement extends HTMLElement {
     return this._data;
   }
 
-  set colors(value: Partial<FlowColors> | undefined) {
-    this._colors = value;
+  set options(value: Partial<PowerFlowSettings> | undefined) {
+    this._options = value;
     this.render();
   }
-  get colors(): Partial<FlowColors> | undefined {
-    return this._colors;
-  }
-
-  set labels(value: Partial<FlowLabels> | undefined) {
-    this._labels = value;
-    this.render();
-  }
-  get labels(): Partial<FlowLabels> | undefined {
-    return this._labels;
-  }
-
-  set icons(value: Partial<FlowIcons> | undefined) {
-    this._icons = value;
-    this.render();
-  }
-  get icons(): Partial<FlowIcons> | undefined {
-    return this._icons;
-  }
-
-  set speedScale(value: number | undefined) {
-    this._speedScale = value;
-    this.render();
-  }
-  get speedScale(): number | undefined {
-    return this._speedScale;
-  }
-
-  set topology(value: Partial<FlowTopology> | undefined) {
-    this._topology = value;
-    this.render();
-  }
-  get topology(): Partial<FlowTopology> | undefined {
-    return this._topology;
-  }
-
-  set iconStyle(value: 'default' | 'full' | undefined) {
-    this._iconStyle = value;
-    this.render();
-  }
-  get iconStyle(): 'default' | 'full' | undefined {
-    return this._iconStyle;
-  }
-
-  set dotShape(value: 'circle' | 'triangle' | undefined) {
-    this._dotShape = value;
-    this.render();
-  }
-  get dotShape(): 'circle' | 'triangle' | undefined {
-    return this._dotShape;
-  }
-
-  set curveBend(value: number | undefined) {
-    this._curveBend = value;
-    this.render();
-  }
-  get curveBend(): number | undefined {
-    return this._curveBend;
+  get options(): Partial<PowerFlowSettings> | undefined {
+    return this._options;
   }
 
   connectedCallback() {
@@ -127,8 +58,7 @@ export class PowerFlowElement extends HTMLElement {
     try {
       const parsed = JSON.parse(value);
       if (name === 'data') this._data = parsed;
-      else if (name === 'colors') this._colors = parsed;
-      else if (name === 'labels') this._labels = parsed;
+      else if (name === 'options') this._options = parsed;
       this.render();
     } catch {
       // Ignore malformed JSON in attributes — property setters are the main API.
@@ -137,17 +67,7 @@ export class PowerFlowElement extends HTMLElement {
 
   private render() {
     if (!this.isConnected) return;
-    const options = {
-      data: this._data,
-      colors: this._colors,
-      labels: this._labels,
-      icons: this._icons,
-      speedScale: this._speedScale,
-      topology: this._topology,
-      iconStyle: this._iconStyle,
-      dotShape: this._dotShape,
-      curveBend: this._curveBend,
-    };
+    const options = { data: this._data, options: this._options };
     if (this.pf) {
       this.pf.update(options);
     } else {

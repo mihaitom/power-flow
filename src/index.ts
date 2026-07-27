@@ -8,6 +8,8 @@ export type {
   FlowIcons,
   FlowTopology,
   PowerFlowOptions,
+  PowerFlowSettings,
+  NodeStyle,
 } from './types';
 export { PowerFlowElement, definePowerFlow } from './element';
 

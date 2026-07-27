@@ -161,7 +161,7 @@ export const CSS = `
   font-size: 11px;
   text-anchor: middle;
   fill: currentColor;
-  opacity: 0.55;
+  opacity: 0.75;
   font-weight: 500;
   letter-spacing: 0.04em;
 }
@@ -170,6 +170,12 @@ export const CSS = `
    set directly in JS (applyIconStyle()), not here, since t-bat-watts already
    carries its own inline font-size that a CSS rule couldn't override. */
 .text-on-full { text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7), 0 1px 6px rgba(0, 0, 0, 0.5); }
+/* nodeStyle: 'filled' — icon/text are painted one uniform color (not a
+   per-node contrast pick) regardless of the node's own accent color, so
+   legibility against that arbitrary accent comes from this shadow instead.
+   Uses the drop-shadow filter rather than text-shadow so one class works on
+   both the icon path and the value/label text elements. */
+.node-filled-ink { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)) drop-shadow(0 1px 5px rgba(0, 0, 0, 0.35)); }
 `;
 
 // Static SVG skeleton. Every node, track and dot is present from the start;
@@ -241,18 +247,6 @@ export const SKELETON = `
   </g>`,
   ).join('\n  ')}
 
-  <!-- Coverage rings, drawn under the node bodies. The home ring shows how
-       the load is sourced (solar/battery/grid); the grid ring shows how an
-       export is sourced (solar/battery). In their own group so the solar
-       node's "dim" state can't fade them. -->
-  <g>
-    <circle id="arc-solar" cx="345" cy="185" r="47" class="home-arc solar-arc" transform="rotate(-90 345 185)" />
-    <circle id="arc-bat" cx="345" cy="185" r="47" class="home-arc bat-arc" transform="rotate(-90 345 185)" />
-    <circle id="arc-grid" cx="345" cy="185" r="47" class="home-arc grid-arc" transform="rotate(-90 345 185)" />
-    <circle id="garc-solar" cx="55" cy="185" r="47" class="home-arc solar-arc" transform="rotate(-90 55 185)" />
-    <circle id="garc-bat" cx="55" cy="185" r="47" class="home-arc bat-arc" transform="rotate(-90 55 185)" />
-  </g>
-
   <!-- ── Solar (top, optional) ── -->
   <g id="n-solar" class="node" data-topo="solar">
     <circle cx="200" cy="60" r="52" class="node-bg" id="solar-bg" />
@@ -278,6 +272,22 @@ export const SKELETON = `
     <path id="home-icon" class="node-icon" transform="${iconTransform(345, 167, 28)}" d="${mdiHome}" />
     <text x="345" y="201" class="val-text" id="t-home-val"></text>
     <text x="345" y="214" class="lbl-text" id="t-home-lbl"></text>
+  </g>
+
+  <!-- Coverage rings for home/grid, drawn *after* (on top of) those two node
+       bodies rather than inside either one — on top so nodeStyle: 'filled's
+       opaque background doesn't blend/mute their color, and in their own
+       group (not nested in any dimmable node) so a node's "dim" state can't
+       fade them. The home ring shows how the load is sourced
+       (solar/battery/grid); the grid ring shows how an export is sourced
+       (solar/battery). Positioned at home/grid's own centers, so document
+       order relative to nodes elsewhere on the diagram doesn't matter. -->
+  <g>
+    <circle id="arc-solar" cx="345" cy="185" r="47" class="home-arc solar-arc" transform="rotate(-90 345 185)" />
+    <circle id="arc-bat" cx="345" cy="185" r="47" class="home-arc bat-arc" transform="rotate(-90 345 185)" />
+    <circle id="arc-grid" cx="345" cy="185" r="47" class="home-arc grid-arc" transform="rotate(-90 345 185)" />
+    <circle id="garc-solar" cx="55" cy="185" r="47" class="home-arc solar-arc" transform="rotate(-90 55 185)" />
+    <circle id="garc-bat" cx="55" cy="185" r="47" class="home-arc bat-arc" transform="rotate(-90 55 185)" />
   </g>
 
   <!-- ── House consumer 1 (above the house, optional) ── -->
@@ -356,7 +366,8 @@ export const SKELETON = `
     <circle cx="345" cy="310" r="52" class="node-bg" id="conflict-bg" />
     <circle cx="345" cy="310" r="52" class="node-ring" id="conflict-ring" />
     <path id="conflict-icon" class="node-icon" transform="${iconTransform(345, 292, 28)}" d="${mdiAlertCircle}" />
-    <text x="345" y="325" class="lbl-text" id="t-conflict-lbl">Conflict</text>
+    <text x="345" y="326" class="val-text" id="t-conflict-val">Conflict</text>
+    <text x="345" y="339" class="lbl-text" id="t-conflict-desc">Hover for details</text>
     <title id="conflict-title">consumer2 and batteryLoad2 cannot both be set — they share the same position. See the "Consumer slot layout" section of the README.</title>
   </g>
 </svg>

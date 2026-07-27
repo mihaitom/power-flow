@@ -49,7 +49,7 @@ crisp scalable vectors; no runtime framework dependency.
 - **Adjustable animation** — dot speed multiplier lets you slow down or speed up
   the flow independently of the power values.
 - **Configurable look** — full-size background icons, arrow-shaped flow dots,
-  and adjustable curve bend are all opt-in via `iconStyle`/`dotShape`/`curveBend`.
+  and adjustable curve bend are all opt-in via `options.iconStyle`/`options.dotShape`/`options.curveBend`.
 - **Tiny & isolated** — ~11 kB min+gzip, zero runtime deps, shadow DOM so its
   styles never leak into your app.
 
@@ -88,10 +88,10 @@ npm install powerflow
 </script>
 ```
 
-`data`, `colors`, `labels`, `icons` and `speedScale` are set as JS
-**properties**. In plain HTML you can also pass `data`, `colors` and `labels` as
-JSON attributes:
-`<power-flow data='{"solar":2400,"grid":-600,"load":1800}'></power-flow>`.
+`data` and `options` (colors, labels, icons, topology and the presentation
+tuning knobs — see [API](#api)) are set as JS **properties**. In plain HTML
+you can also pass both as JSON attributes:
+`<power-flow data='{"solar":2400,"grid":-600,"load":1800}' options='{"colors":{"solar":"#f90"}}'></power-flow>`.
 
 ## Framework usage
 
@@ -122,7 +122,7 @@ Add `CUSTOM_ELEMENTS_SCHEMA` to your module/component, `import "powerflow";`
 once, then:
 
 ```html
-<power-flow [data]="data" [colors]="colors"></power-flow>
+<power-flow [data]="data" [options]="options"></power-flow>
 ```
 
 </details>
@@ -131,10 +131,25 @@ once, then:
 <summary><b>Vue 3</b></summary>
 
 `import "powerflow";` once, tell Vue the tag is a custom element
-(`compilerOptions.isCustomElement`), then:
+(`compilerOptions.isCustomElement`), then (Options API):
 
 ```vue
-<power-flow :data="data" :labels="labels" />
+<template>
+  <power-flow :data="data" :options="options" />
+</template>
+
+<script>
+import 'powerflow';
+
+export default {
+  props: ['data'],
+  data() {
+    return {
+      options: { labels: { home: 'Haus' } },
+    };
+  },
+};
+</script>
 ```
 
 </details>
@@ -157,17 +172,31 @@ leak into your app.
 
 ## API
 
-| Property / option | Type                  | Description                                               |
-| ----------------- | --------------------- | --------------------------------------------------------- |
-| `data`            | `FlowData`            | Live power readings (watts).                              |
-| `colors`          | `Partial<FlowColors>` | Override any accent colour.                               |
-| `labels`          | `Partial<FlowLabels>` | Override node labels (i18n).                              |
-| `icons`           | `Partial<FlowIcons>`  | Override node icons (any SVG `<path d="">` string).       |
-| `speedScale`      | `number`              | Dot speed multiplier. `1` = default, `2` = twice as fast. |
-| `topology`        | `Partial<FlowTopology>` | Enable/disable individual built-in connections. All default `true`. |
-| `iconStyle`       | `'default' \| 'full'` | `'full'` draws each icon large behind its value/label text. Default `'default'`. |
-| `dotShape`        | `'circle' \| 'triangle'` | `'triangle'` draws flow dots as arrowheads pointing in their direction of travel. Default `'circle'`. |
-| `curveBend`       | `number`              | Shape of the diagram's curved connections. `0` = straight lines, `1` (default) = today's curve, up to `2` = straighter departure/arrival with a sharper turn. |
+`<power-flow>` takes just two properties: `data` (live readings) and `options`
+(everything about how the diagram looks/behaves).
+
+| Property | Type                    | Description                     |
+| -------- | ----------------------- | -------------------------------- |
+| `data`   | `FlowData`               | Live power readings (watts).    |
+| `options`| `Partial<PowerFlowSettings>` | Colors, labels, icons, topology and presentation tuning — see below. |
+
+### `PowerFlowSettings` (the `options` object)
+
+| Field        | Type                     | Description                                               |
+| ------------ | ------------------------ | ----------------------------------------------------------- |
+| `colors`     | `Partial<FlowColors>`    | Override any accent colour.                                |
+| `labels`     | `Partial<FlowLabels>`    | Override node labels (i18n).                               |
+| `icons`      | `Partial<FlowIcons>`     | Override node icons (any SVG `<path d="">` string).        |
+| `topology`   | `Partial<FlowTopology>`  | Enable/disable individual built-in connections. All default `true`. |
+| `speedScale` | `number`                 | Dot speed multiplier. `1` = default, `2` = twice as fast.  |
+| `nodeStyle`  | `'soft' \| 'tonal' \| 'outline' \| 'filled'` | How each node's background/ring/icon/text are painted. Default `'soft'`. |
+| `iconStyle`  | `'default' \| 'full'`    | `'full'` draws each icon large behind its value/label text. Default `'default'`. |
+| `dotShape`   | `'circle' \| 'triangle'` | `'triangle'` draws flow dots as arrowheads pointing in their direction of travel. Default `'circle'`. |
+| `curveBend`  | `number`                 | Shape of the diagram's curved connections. `0` = straight lines, `1` (default) = today's curve, up to `2` = straighter departure/arrival with a sharper turn. |
+
+`options` is set as a whole (`pf.options = { iconStyle: 'full' }`) rather than
+merged automatically — pass along whatever previous fields you want to keep,
+e.g. `pf.options = { ...pf.options, iconStyle: 'full' }`.
 
 ### `FlowData`
 
@@ -233,12 +262,15 @@ built-in connections; everything defaults to `true` (today's behavior), so
 existing configs are unaffected:
 
 ```ts
-pf.topology = {
-  solarToHome: true,
-  solarToGrid: true,
-  solarToBattery: true,
-  batteryToHome: true,
-  batteryToGrid: true,
+pf.options = {
+  ...pf.options,
+  topology: {
+    solarToHome: true,
+    solarToGrid: true,
+    solarToBattery: true,
+    batteryToHome: true,
+    batteryToGrid: true,
+  },
 };
 ```
 
@@ -253,32 +285,35 @@ Balcony-PV example — a PV source with no direct link to the house/grid:
 
 ```ts
 pf.data = { solar: 600, grid: 200, load: 900, battery: -300 };
-pf.topology = { solarToHome: false, solarToGrid: false };
+pf.options = { ...pf.options, topology: { solarToHome: false, solarToGrid: false } };
 ```
 
 ### `colors`
 
 ```ts
-{
-  solar:      "#fcd34d", // amber-yellow
-  home:       "#818cf8", // periwinkle
-  gridIn:     "#60a5fa", // sky blue  — importing from grid
-  gridOut:    "#f472b6", // pink      — exporting to grid
-  batteryIn:  "#4ade80", // lime green — charging
-  batteryOut: "#fb923c", // orange    — discharging
-  consumer1: "#22d3ee", // cyan
-  consumer2: "#2dd4bf", // teal
-  consumer3: "#38bdf8", // sky blue
-  consumer4: "#0d9488", // deep teal
-  batteryLoad1:  "#a78bfa", // violet — battery-fed direct load 1
-  batteryLoad2: "#c084fc", // purple — battery-fed direct load 2
-}
+pf.options = {
+  ...pf.options,
+  colors: {
+    solar:      "#fcd34d", // amber-yellow
+    home:       "#818cf8", // periwinkle
+    gridIn:     "#60a5fa", // sky blue  — importing from grid
+    gridOut:    "#f472b6", // pink      — exporting to grid
+    batteryIn:  "#4ade80", // lime green — charging
+    batteryOut: "#fb923c", // orange    — discharging
+    consumer1: "#22d3ee", // cyan
+    consumer2: "#2dd4bf", // teal
+    consumer3: "#38bdf8", // sky blue
+    consumer4: "#0d9488", // deep teal
+    batteryLoad1:  "#a78bfa", // violet — battery-fed direct load 1
+    batteryLoad2: "#c084fc", // purple — battery-fed direct load 2
+  },
+};
 ```
 
 ### `labels` (i18n)
 
 Defaults are English. Override per language, e.g.
-`{ grid: "Netz", home: "Haus", battery: "Akku" }`.
+`pf.options = { ...pf.options, labels: { grid: "Netz", home: "Haus", battery: "Akku" } }`.
 
 ### `icons`
 
@@ -289,10 +324,13 @@ SVG path drawn in a 24×24 viewBox works:
 ```ts
 import { mdiSolarPanel, mdiFlash } from '@mdi/js';
 
-pf.icons = {
-  solar: mdiSolarPanel, // swap the default solar-power-variant icon
-  grid: mdiFlash, // swap the transmission tower
-  // home / battery / consumer1 / consumer2 / consumer3 / consumer4 / batteryLoad1 / batteryLoad2 — all optional
+pf.options = {
+  ...pf.options,
+  icons: {
+    solar: mdiSolarPanel, // swap the default solar-power-variant icon
+    grid: mdiFlash, // swap the transmission tower
+    // home / battery / consumer1 / consumer2 / consumer3 / consumer4 / batteryLoad1 / batteryLoad2 — all optional
+  },
 };
 ```
 
@@ -303,22 +341,38 @@ proportional to power, so `speedScale` lets you tune the visual intensity
 without changing the underlying data:
 
 ```ts
-pf.speedScale = 0.5; // half speed — calmer animation
-pf.speedScale = 2; // twice as fast — more energetic feel
+pf.options = { ...pf.options, speedScale: 0.5 }; // half speed — calmer animation
+pf.options = { ...pf.options, speedScale: 2 }; // twice as fast — more energetic feel
 ```
+
+### `nodeStyle`
+
+How every node's background/ring/icon/text are painted, from a soft tint up
+to a fully-colored badge:
+
+```ts
+pf.options = { ...pf.options, nodeStyle: 'soft' }; // light tint + colored ring (the default)
+pf.options = { ...pf.options, nodeStyle: 'tonal' }; // opaque, muted fill, no ring
+pf.options = { ...pf.options, nodeStyle: 'outline' }; // transparent, just a colored ring
+pf.options = { ...pf.options, nodeStyle: 'filled' }; // accent-colored background, white icon/text
+```
+
+`filled` always paints icon/text a uniform white — never a different color
+per node — and relies on a drop shadow (not a per-node contrast pick) to
+stay legible against whatever accent color that node happens to have.
 
 ### `iconStyle`
 
 ```ts
-pf.iconStyle = 'full'; // large, dimmed icon behind the value/label text
-pf.iconStyle = 'default'; // small icon above the text (the default)
+pf.options = { ...pf.options, iconStyle: 'full' }; // large, dimmed icon behind the value/label text
+pf.options = { ...pf.options, iconStyle: 'default' }; // small icon above the text (the default)
 ```
 
 ### `dotShape`
 
 ```ts
-pf.dotShape = 'triangle'; // small arrowheads that point in their flow direction
-pf.dotShape = 'circle'; // plain circles (the default)
+pf.options = { ...pf.options, dotShape: 'triangle' }; // small arrowheads that point in their flow direction
+pf.options = { ...pf.options, dotShape: 'circle' }; // plain circles (the default)
 ```
 
 ### `curveBend`
@@ -329,9 +383,9 @@ departure/arrival direction before turning — not by bulging the whole arc
 further from a straight line:
 
 ```ts
-pf.curveBend = 0; // straightens every curve into a direct line
-pf.curveBend = 1; // today's curve (the default)
-pf.curveBend = 2; // longer straight run out of/into each node, with a
+pf.options = { ...pf.options, curveBend: 0 }; // straightens every curve into a direct line
+pf.options = { ...pf.options, curveBend: 1 }; // today's curve (the default)
+pf.options = { ...pf.options, curveBend: 2 }; // longer straight run out of/into each node, with a
 // sharper turn in between (the maximum — kept at 2 so curves don't cross
 // neighboring nodes)
 ```

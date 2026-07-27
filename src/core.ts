@@ -4,6 +4,7 @@ import type {
   FlowIcons,
   FlowTopology,
   PowerFlowOptions,
+  NodeStyle,
 } from './types';
 import { DEFAULT_COLORS, DEFAULT_LABELS, DEFAULT_ICONS, DEFAULT_TOPOLOGY } from './defaults';
 import { computeFlowAllocation } from './flow-allocation';
@@ -29,10 +30,21 @@ function formatWatts(watts: number): string {
     : `${Math.round(watts)} W`;
 }
 
-/** Translucent fill derived from a node's accent color. */
-function tint(color: string): string {
-  return `color-mix(in srgb, ${color} 15%, transparent)`;
+/** Translucent fill derived from a node's accent color. `pct` is how much of
+ *  the mix is the accent color itself — the rest lets whatever's behind the
+ *  SVG show through, which is why this stays theme-adaptive without the
+ *  component needing to know the host page's light/dark background. */
+function tint(color: string, pct = 15): string {
+  return `color-mix(in srgb, ${color} ${pct}%, transparent)`;
 }
+
+// `nodeStyle: 'filled'` always paints icon/text in this one color, the same
+// for every node regardless of its own accent color — a per-node computed
+// ink (dark on light accents, white on dark ones) reads as inconsistent
+// across a diagram with several differently-colored nodes. Legibility across
+// arbitrary accent colors instead comes from the `.node-filled-ink` drop
+// shadow (see CSS) rather than from picking a matching text color.
+const FILLED_INK = '#fff';
 
 /**
  * Framework-agnostic renderer for the energy-flow diagram. Renders into a
@@ -59,7 +71,7 @@ export class PowerFlow {
     { prefix: 'c4', icon: 'c4-icon', texts: ['t-c4-val', 't-c4-lbl'] },
     { prefix: 'bl1', icon: 'bl1-icon', texts: ['t-bl1-val', 't-bl1-lbl'] },
     { prefix: 'bl2', icon: 'bl2-icon', texts: ['t-bl2-val', 't-bl2-lbl'] },
-    { prefix: 'conflict', icon: 'conflict-icon', texts: ['t-conflict-lbl'] },
+    { prefix: 'conflict', icon: 'conflict-icon', texts: ['t-conflict-val', 't-conflict-desc'] },
   ];
   // Populated once in cacheIconLayouts(), keyed by prefix — the exact
   // transform/y values the static skeleton shipped with, so 'default' mode
@@ -77,6 +89,7 @@ export class PowerFlow {
   private icons: FlowIcons = { ...DEFAULT_ICONS };
   private topology: FlowTopology = DEFAULT_TOPOLOGY;
   private speedScale = 1;
+  private nodeStyle: NodeStyle = 'soft';
   private iconStyle: 'default' | 'full' = 'default';
   private dotShape: 'circle' | 'triangle' = 'circle';
   private curveBend = 1;
@@ -266,6 +279,23 @@ export class PowerFlow {
     }
   }
 
+  // The home/grid coverage rings (drawn on top of those node bodies — see
+  // the comment in skeleton.ts) and the battery SoC ring (drawn inside its
+  // own node, already on top of that node's body) all get the same
+  // `nodeStyle: 'filled'` drop shadow as the icon/text painted in paintNode().
+  private static readonly COVERAGE_RING_IDS = [
+    'arc-solar',
+    'arc-bat',
+    'arc-grid',
+    'garc-solar',
+    'garc-bat',
+    'bat-soc-arc',
+  ];
+  private applyRingShadow() {
+    const on = this.nodeStyle === 'filled';
+    for (const id of PowerFlow.COVERAGE_RING_IDS) this.el[id]?.classList.toggle('node-filled-ink', on);
+  }
+
   // How far (in px along the path) placeDot() samples on either side of a
   // triangle dot's position to find its direction of travel.
   private static readonly TANGENT_SAMPLE_PX = 0.5;
@@ -316,32 +346,37 @@ export class PowerFlow {
   /** Re-render with new data / colors / labels / icons / speedScale. Cheap to call frequently. */
   update(options: PowerFlowOptions) {
     const data = options.data;
-    if (options.colors !== undefined) {
-      this.colors = { ...DEFAULT_COLORS, ...options.colors };
+    const settings = options.options;
+    if (settings?.colors !== undefined) {
+      this.colors = { ...DEFAULT_COLORS, ...settings.colors };
     }
-    if (options.labels !== undefined) {
-      this.labels = { ...DEFAULT_LABELS, ...options.labels };
+    if (settings?.labels !== undefined) {
+      this.labels = { ...DEFAULT_LABELS, ...settings.labels };
     }
-    if (options.icons !== undefined) {
-      this.icons = { ...DEFAULT_ICONS, ...options.icons };
+    if (settings?.icons !== undefined) {
+      this.icons = { ...DEFAULT_ICONS, ...settings.icons };
     }
-    if (options.speedScale !== undefined) {
-      this.speedScale = options.speedScale;
+    if (settings?.topology !== undefined) {
+      this.topology = { ...DEFAULT_TOPOLOGY, ...settings.topology };
     }
-    if (options.topology !== undefined) {
-      this.topology = { ...DEFAULT_TOPOLOGY, ...options.topology };
+    if (settings?.speedScale !== undefined) {
+      this.speedScale = settings.speedScale;
     }
-    if (options.iconStyle !== undefined) {
-      this.iconStyle = options.iconStyle;
+    if (settings?.nodeStyle !== undefined) {
+      this.nodeStyle = settings.nodeStyle;
     }
-    if (options.curveBend !== undefined) {
-      this.curveBend = Math.max(0, Math.min(2.0, options.curveBend));
+    if (settings?.iconStyle !== undefined) {
+      this.iconStyle = settings.iconStyle;
     }
-    if (options.dotShape !== undefined && options.dotShape !== this.dotShape) {
-      this.swapDotShape(options.dotShape);
+    if (settings?.curveBend !== undefined) {
+      this.curveBend = Math.max(0, Math.min(2.0, settings.curveBend));
+    }
+    if (settings?.dotShape !== undefined && settings.dotShape !== this.dotShape) {
+      this.swapDotShape(settings.dotShape);
     }
     this.applyIconStyle();
     this.applyCurveBend();
+    this.applyRingShadow();
     const { colors, labels, icons, topology: topo } = this;
 
     this.setIconPath('solar-icon', icons.solar);
@@ -529,9 +564,7 @@ export class PowerFlow {
     // ── Solar node ──
     if (hasSolar) {
       this.el['n-solar'].classList.toggle('dim', solarWatts === 0);
-      this.fill('solar-bg', tint(colors.solar));
-      this.stroke('solar-ring', colors.solar);
-      this.fill('solar-icon', colors.solar);
+      this.paintNode('solar', colors.solar);
       this.text('t-solar-val', formatWatts(solarWatts));
       this.labelText('t-solar-lbl', labels.solar);
     }
@@ -555,18 +588,19 @@ export class PowerFlow {
 
     // ── Grid node ──
     const gridColor = gridWatts >= 0 ? colors.gridIn : colors.gridOut;
-    this.fill('grid-bg', tint(gridColor));
-    this.stroke('grid-ring', gridColor);
-    this.fill('grid-icon', gridColor);
+    this.paintNode('grid', gridColor);
     const gridVal = this.el['t-grid-val'] as SVGTextElement;
-    gridVal.style.fill = gridColor;
+    // Normally colored with the accent itself (unlike other nodes' neutral
+    // value text) to make the import/export direction pop — but that would
+    // blend into `filled`'s same-hue background, so it switches to the
+    // uniform filled ink there too (paintNode already put the shadow class
+    // on this element via ICON_LAYOUT_NODES' 'grid' texts entry).
+    gridVal.style.fill = this.nodeStyle === 'filled' ? FILLED_INK : gridColor;
     gridVal.textContent = `${gridWatts >= 0 ? '→' : '←'} ${formatWatts(Math.abs(gridWatts))}`;
     this.labelText('t-grid-lbl', labels.grid);
 
     // ── Home node ──
-    this.fill('home-bg', tint(colors.home));
-    this.stroke('home-ring', colors.home);
-    this.fill('home-icon', colors.home);
+    this.paintNode('home', colors.home);
     this.text('t-home-val', formatWatts(loadWatts));
     this.labelText('t-home-lbl', labels.home);
 
@@ -574,20 +608,25 @@ export class PowerFlow {
     if (hasBattery) {
       const batteryColor =
         batteryWatts < 0 ? colors.batteryIn : colors.batteryOut;
-      this.fill('bat-bg', tint(batteryColor));
-      this.stroke('bat-ring', batteryColor);
-      this.fill('bat-icon', batteryColor);
+      this.paintNode('bat', batteryColor);
       const soc = this.el['t-bat-soc'] as SVGTextElement;
       soc.style.display = data.batterySoc != null ? '' : 'none';
       if (data.batterySoc != null)
         soc.textContent = `${Math.round(data.batterySoc)} %`;
       const watts = this.el['t-bat-watts'] as SVGTextElement;
-      watts.style.fill = batteryColor;
+      // Same accent-colored-value pattern (and same `filled`-mode fixup) as
+      // the grid node's value text above.
+      watts.style.fill = this.nodeStyle === 'filled' ? FILLED_INK : batteryColor;
       watts.textContent = `${batteryWatts >= 0 ? '↑' : '↓'} ${formatWatts(Math.abs(batteryWatts))}`;
       this.labelText('t-bat-lbl', labels.battery);
-      // SoC inner ring — progress arc from 12 o'clock clockwise.
+      // SoC inner ring — progress arc from 12 o'clock clockwise. Same
+      // `filled`-mode fixup as the value texts above: unlike the home/grid
+      // coverage rings (a different accent color than their node's own bg),
+      // this ring's stroke is `batteryColor` — the *same* color `paintNode`
+      // just gave the background, so at `filled`'s full opacity it would
+      // otherwise vanish into it entirely, not just blend.
       const socArc = this.el['bat-soc-arc'] as SVGCircleElement;
-      socArc.style.stroke = batteryColor;
+      socArc.style.stroke = this.nodeStyle === 'filled' ? FILLED_INK : batteryColor;
       const pct =
         data.batterySoc != null
           ? Math.max(0, Math.min(100, data.batterySoc)) / 100
@@ -598,9 +637,7 @@ export class PowerFlow {
     // ── Consumer 1 node (home consumer, top-left of its 2×2) ──
     if (hasConsumer1) {
       this.el['n-consumer1'].classList.toggle('dim', consumer1Watts === 0);
-      this.fill('c1-bg', tint(colors.consumer1));
-      this.stroke('c1-ring', colors.consumer1);
-      this.fill('c1-icon', colors.consumer1);
+      this.paintNode('c1', colors.consumer1);
       this.text('t-c1-val', formatWatts(consumer1Watts));
       this.labelText('t-c1-lbl', labels.consumer1);
     }
@@ -608,9 +645,7 @@ export class PowerFlow {
     // ── Consumer 2 node (home consumer, bottom-left of its 2×2) ──
     if (hasConsumer2) {
       this.el['n-consumer2'].classList.toggle('dim', consumer2Watts === 0);
-      this.fill('c2-bg', tint(colors.consumer2));
-      this.stroke('c2-ring', colors.consumer2);
-      this.fill('c2-icon', colors.consumer2);
+      this.paintNode('c2', colors.consumer2);
       this.text('t-c2-val', formatWatts(consumer2Watts));
       this.labelText('t-c2-lbl', labels.consumer2);
     }
@@ -618,9 +653,7 @@ export class PowerFlow {
     // ── Consumer 3 node (home consumer, top-right of its 2×2) ──
     if (hasConsumer3) {
       this.el['n-consumer3'].classList.toggle('dim', consumer3Watts === 0);
-      this.fill('c3-bg', tint(colors.consumer3));
-      this.stroke('c3-ring', colors.consumer3);
-      this.fill('c3-icon', colors.consumer3);
+      this.paintNode('c3', colors.consumer3);
       this.text('t-c3-val', formatWatts(consumer3Watts));
       this.labelText('t-c3-lbl', labels.consumer3);
     }
@@ -628,9 +661,7 @@ export class PowerFlow {
     // ── Consumer 4 node (home consumer, bottom-right of its 2×2) ──
     if (hasConsumer4) {
       this.el['n-consumer4'].classList.toggle('dim', consumer4Watts === 0);
-      this.fill('c4-bg', tint(colors.consumer4));
-      this.stroke('c4-ring', colors.consumer4);
-      this.fill('c4-icon', colors.consumer4);
+      this.paintNode('c4', colors.consumer4);
       this.text('t-c4-val', formatWatts(consumer4Watts));
       this.labelText('t-c4-lbl', labels.consumer4);
     }
@@ -638,9 +669,7 @@ export class PowerFlow {
     // ── Battery load 1 node ──
     if (hasBatteryLoad) {
       this.el['n-batteryload1'].classList.toggle('dim', batteryLoad1Watts === 0);
-      this.fill('bl1-bg', tint(colors.batteryLoad1));
-      this.stroke('bl1-ring', colors.batteryLoad1);
-      this.fill('bl1-icon', colors.batteryLoad1);
+      this.paintNode('bl1', colors.batteryLoad1);
       this.text('t-bl1-val', formatWatts(batteryLoad1Watts));
       this.labelText('t-bl1-lbl', labels.batteryLoad1);
     }
@@ -651,9 +680,7 @@ export class PowerFlow {
         'dim',
         batteryLoad2Watts === 0,
       );
-      this.fill('bl2-bg', tint(colors.batteryLoad2));
-      this.stroke('bl2-ring', colors.batteryLoad2);
-      this.fill('bl2-icon', colors.batteryLoad2);
+      this.paintNode('bl2', colors.batteryLoad2);
       this.text('t-bl2-val', formatWatts(batteryLoad2Watts));
       this.labelText('t-bl2-lbl', labels.batteryLoad2);
     }
@@ -661,9 +688,7 @@ export class PowerFlow {
     // ── Slot conflict indicator — fixed colors, not user-configurable, since
     // it signals a data misconfiguration rather than a themable flow. ──
     if (hasSlotConflict) {
-      this.fill('conflict-bg', tint(PowerFlow.CONFLICT_COLOR));
-      this.stroke('conflict-ring', PowerFlow.CONFLICT_COLOR);
-      this.fill('conflict-icon', PowerFlow.CONFLICT_COLOR);
+      this.paintNode('conflict', PowerFlow.CONFLICT_COLOR);
     }
   }
 
@@ -704,6 +729,49 @@ export class PowerFlow {
 
   private stroke(id: string, color: string) {
     (this.el[id] as SVGElement | undefined)?.style.setProperty('stroke', color);
+  }
+
+  // Paints one node's background/ring/icon/text for the current `nodeStyle`,
+  // replacing the fill/stroke triple every node used to repeat inline.
+  // `prefix` must match an entry in ICON_LAYOUT_NODES — its `-bg`/`-ring`/
+  // `-icon` ids and text ids are derived/looked up from there.
+  private paintNode(prefix: string, color: string) {
+    const texts = PowerFlow.ICON_LAYOUT_NODES.find((n) => n.prefix === prefix)?.texts ?? [];
+    const isFilled = this.nodeStyle === 'filled';
+    const bg =
+      isFilled
+        ? color
+        : this.nodeStyle === 'tonal'
+          ? tint(color, 55)
+          : this.nodeStyle === 'outline'
+            ? 'none'
+            : tint(color);
+    const ringHidden = this.nodeStyle === 'tonal' || isFilled;
+
+    this.fill(`${prefix}-bg`, bg);
+    this.stroke(`${prefix}-ring`, ringHidden ? 'none' : color);
+    this.fill(`${prefix}-icon`, isFilled ? FILLED_INK : color);
+    this.filledShadow(`${prefix}-icon`, isFilled);
+    for (const id of texts) {
+      this.textFill(id, isFilled ? FILLED_INK : null);
+      this.filledShadow(id, isFilled);
+    }
+  }
+
+  // `null` clears a previous override, falling back to the CSS default
+  // (`fill: currentColor`) — needed so switching *away* from `filled` (the
+  // only style that overrides text color) doesn't leave a stale inline fill.
+  private textFill(id: string, color: string | null) {
+    const node = (this.el[id] as SVGElement | undefined)?.style;
+    if (!node) return;
+    if (color) node.setProperty('fill', color);
+    else node.removeProperty('fill');
+  }
+
+  // Toggles the drop-shadow that keeps `FILLED_INK` legible regardless of
+  // the node's own accent color — see `.node-filled-ink` in CSS.
+  private filledShadow(id: string, on: boolean) {
+    this.el[id]?.classList.toggle('node-filled-ink', on);
   }
 
   private text(id: string, value: string) {

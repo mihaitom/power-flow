@@ -58,6 +58,15 @@
         <hr />
 
         <div class="section-title">Appearance</div>
+        <div class="ctrl">
+          <label>Node style</label>
+          <div class="chip-tabs" id="node-style-tabs">
+            <button data-node-style="outline">Outline</button>
+            <button data-node-style="soft" class="on">Soft</button>
+            <button data-node-style="tonal">Tonal</button>
+            <button data-node-style="filled">Filled</button>
+          </div>
+        </div>
         <label class="toggle">
           <input id="icon-style-full" type="checkbox" /> Full-size icons
           (behind labels)
@@ -345,7 +354,7 @@
         <button id="close-code" style="padding: 4px 10px">✕</button>
       </div>
       <div class="install-section">
-        <div id="pm-tabs"></div>
+        <div class="chip-tabs" id="pm-tabs"></div>
         <div class="install-cmd-row">
           <code id="install-cmd"></code>
           <button id="copy-install" style="padding:4px 10px; white-space: nowrap; color: #e6edf3; border-color: #e6edf3;">Copy</button>

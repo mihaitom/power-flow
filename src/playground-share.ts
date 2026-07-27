@@ -1,5 +1,6 @@
 import {
   mdiLanguageHtml5,
+  mdiLanguageTypescript,
   mdiReact,
   mdiAngular,
   mdiVuejs,
@@ -22,7 +23,31 @@ import {
 import { cinp, DEFAULT_COLORS, applyColors } from './playground-colors';
 import { currentIcons, DEFAULT_ICONS, ICON_NAMES } from './playground-icons';
 import { currentLabels, APPLIANCE_ICON_NAMES } from './playground-appliances';
-import { updateLoadMin, updateGrid, speedInp, vSpeed } from './playground-state';
+import {
+  updateLoadMin,
+  updateGrid,
+  speedInp,
+  vSpeed,
+  iconStyleInp,
+  dotShapeInp,
+  curveBendInp,
+  vCurveBend,
+  currentNodeStyle,
+  setNodeStyle,
+} from './playground-state';
+
+// Consumer-slot keys whose icon/label are only meaningful while the slot's
+// own checkbox is on — used to keep the generated `icons`/`labels` snippets
+// (and the shuffle results they draw from) from listing entries for
+// currently-disabled consumers.
+const SLOT_HAS: Record<string, HTMLInputElement> = {
+  consumer1: hasC1,
+  consumer2: hasC2,
+  consumer3: hasC3,
+  consumer4: hasC4,
+  batteryLoad1: hasBl1,
+  batteryLoad2: hasBl2,
+};
 
 const ALL_ICON_NAMES = { ...ICON_NAMES, ...APPLIANCE_ICON_NAMES };
 
@@ -68,8 +93,14 @@ installCmdEl.textContent = PKG_MANAGERS[0].cmd;
 const codeDialog = document.getElementById('code-dialog') as HTMLDialogElement;
 let activeFw = 'html';
 
+// `viewBox` defaults to the icon's native 24×24 box; a few MDI glyphs (the
+// TypeScript "TS" badge) are drawn
+// inset within that box — at a shared render size it'd look noticeably
+// smaller than the edge-to-edge logos, so those crop to their own ink
+// bounds (both happen to sit at 3,3–21,21) to fill the same visual size.
 const FW_TABS = [
   { fw: 'html', label: 'HTML', icon: mdiLanguageHtml5 },
+  { fw: 'ts', label: 'TypeScript', icon: mdiLanguageTypescript, viewBox: '3 3 18 18' },
   { fw: 'react', label: 'React', icon: mdiReact },
   { fw: 'angular', label: 'Angular', icon: mdiAngular },
   { fw: 'vue', label: 'Vue 3', icon: mdiVuejs },
@@ -77,6 +108,7 @@ const FW_TABS = [
 ];
 const FW_LANG: Record<string, string> = {
   html: 'html',
+  ts: 'typescript',
   react: 'javascript',
   angular: 'typescript',
   vue: 'html',
@@ -84,10 +116,10 @@ const FW_LANG: Record<string, string> = {
 };
 
 const fwTabsEl = document.getElementById('fw-tabs') as HTMLElement;
-FW_TABS.forEach(({ fw, label, icon }, i) => {
+FW_TABS.forEach(({ fw, label, icon, viewBox }, i) => {
   const b = document.createElement('button');
   b.dataset.fw = fw;
-  b.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" style="vertical-align:-2px;margin-right:4px;"><path d="${icon}" fill="currentColor"/></svg>${label}`;
+  b.innerHTML = `<svg viewBox="${viewBox ?? '0 0 24 24'}" width="18" height="18" style="vertical-align:-4px;margin-right:4px;"><path d="${icon}" fill="currentColor"/></svg>${label}`;
   if (i === 0) b.classList.add('on');
   b.addEventListener('click', () => {
     fwTabsEl
@@ -137,7 +169,7 @@ function buildSnippet(fw: string): string {
   );
 
   const changedIconEntries = Object.entries(currentIcons).filter(
-    ([k, v]) => v !== DEFAULT_ICONS[k],
+    ([k, v]) => v !== DEFAULT_ICONS[k] && (SLOT_HAS[k]?.checked ?? true),
   );
   const hasIcons = changedIconEntries.length > 0;
   const iconConstNames = changedIconEntries.map(([, v]) => ALL_ICON_NAMES[v]).filter(Boolean);
@@ -148,18 +180,70 @@ function buildSnippet(fw: string): string {
     return `{\n${inner},\n${pad}}`;
   };
 
-  const assign = (pfVar: string, pad: string): string => {
-    const r = [`${pad}${pfVar}.data = ${jsObj(data, pad)};`];
+  const activeLabels = currentLabels
+    ? Object.fromEntries(
+        Object.entries(currentLabels).filter(([k]) => SLOT_HAS[k]?.checked ?? true),
+      )
+    : null;
+
+  // The `data`/`options` object literals shared by every framework's
+  // snippet — `pad` is the indent level the *contents* of each literal sit
+  // at (i.e. what `jsObj` expects: entries one level deeper, closing brace
+  // at `pad`). `optionsLiteral` is `null` when nothing needs overriding, so
+  // callers can skip the field/binding entirely rather than emit `options: {}`.
+  const buildParts = (pad: string): { dataLiteral: string; optionsLiteral: string | null } => {
+    const dataLiteral = jsObj(data, pad);
+
+    // Everything besides `data` — colors, labels, icons, topology and the
+    // presentation tuning knobs — nests under a single `options` object.
+    const optInner = pad + '  ';
+    const optFields: string[] = [];
     if (Object.keys(changedColors).length)
-      r.push(`${pad}${pfVar}.colors = ${jsObj(changedColors, pad)};`);
+      optFields.push(`${optInner}colors: ${jsObj(changedColors, optInner)}`);
     if (hasIcons)
-      r.push(`${pad}${pfVar}.icons = ${iconObjStr(pad)};`);
-    if (currentLabels) r.push(`${pad}${pfVar}.labels = ${jsObj(currentLabels, pad)};`);
-    if (+speedInp.value !== 1)
-      r.push(`${pad}${pfVar}.speedScale = ${+speedInp.value};`);
+      optFields.push(`${optInner}icons: ${iconObjStr(optInner)}`);
+    if (activeLabels && Object.keys(activeLabels).length)
+      optFields.push(`${optInner}labels: ${jsObj(activeLabels, optInner)}`);
     if (Object.keys(changedTopology).length)
-      r.push(`${pad}${pfVar}.topology = ${jsObj(changedTopology, pad)};`);
-    return r.join('\n');
+      optFields.push(`${optInner}topology: ${jsObj(changedTopology, optInner)}`);
+    if (+speedInp.value !== 1)
+      optFields.push(`${optInner}speedScale: ${+speedInp.value}`);
+    if (currentNodeStyle !== 'soft')
+      optFields.push(`${optInner}nodeStyle: "${currentNodeStyle}"`);
+    if (iconStyleInp.checked) optFields.push(`${optInner}iconStyle: "full"`);
+    if (dotShapeInp.checked) optFields.push(`${optInner}dotShape: "triangle"`);
+    if (+curveBendInp.value !== 1)
+      optFields.push(`${optInner}curveBend: ${+curveBendInp.value}`);
+    const optionsLiteral = optFields.length
+      ? `{\n${optFields.join(',\n')},\n${pad}}`
+      : null;
+
+    return { dataLiteral, optionsLiteral };
+  };
+
+  const buildFields = (pad: string): string[] => {
+    const { dataLiteral, optionsLiteral } = buildParts(pad);
+    const fields = [`${pad}data: ${dataLiteral}`];
+    if (optionsLiteral) fields.push(`${pad}options: ${optionsLiteral}`);
+    return fields;
+  };
+
+  // One combined Object.assign(...) call instead of a separate `pfVar.x = y;`
+  // line per option — Object.assign still invokes each property's own setter
+  // in order (same runtime effect), just as one statement. Used for HTML and
+  // React, which (unlike Angular/Svelte/Vue) can't bind object-valued props
+  // to a custom element declaratively — React < 19's JSX only sets string
+  // attributes on unknown tags, and plain HTML has no binding system at all.
+  const assign = (pfVar: string, pad: string): string => {
+    const fields = buildFields(pad + '  ');
+    return `${pad}Object.assign(${pfVar}, {\n${fields.join(',\n')},\n${pad}});`;
+  };
+
+  // Same fields, but as the object literal returned from Vue's Options-API
+  // `data()` — `pad` is the indent level of the `return {`/`}` lines.
+  const dataObj = (pad: string): string => {
+    const fields = buildFields(pad + '  ');
+    return `{\n${fields.join(',\n')},\n${pad}}`;
   };
 
   const mdiImport = hasIcons ? `import { ${iconConstNames.join(', ')} } from '@mdi/js';\n` : '';
@@ -175,6 +259,20 @@ ${mdiImportHtml}  const pf = document.getElementById("pf");
 ${assign('pf', '  ')}
 <\/script>`;
 
+  if (fw === 'ts') {
+    // No custom element at all — `createPowerFlow` renders straight into a
+    // host element's shadow root, fully typed (`FlowData`/`PowerFlowOptions`).
+    const fields = buildFields('  ');
+    return `import { createPowerFlow } from "powerflow";
+${mdiImport}
+const pf = createPowerFlow(document.getElementById("box")!, {
+${fields.join(',\n')},
+});
+
+// pf.update({ data: nextData }); // cheap, call as often as you like
+// pf.destroy();`;
+  }
+
   if (fw === 'react')
     return `import "powerflow";
 ${mdiImport}import { useRef, useEffect } from "react";
@@ -188,48 +286,55 @@ ${assign('pf', '    ')}
   return <power-flow ref={ref} />;
 }`;
 
-  if (fw === 'angular')
+  if (fw === 'angular') {
+    // Angular's template compiler can bind object-valued properties straight
+    // onto a custom element (`[prop]="expr"`) once it knows to allow unknown
+    // tags — no ViewChild/nativeElement detour needed.
+    const { dataLiteral, optionsLiteral } = buildParts('  ');
+    const optionsBinding = optionsLiteral ? ' [options]="options"' : '';
+    const optionsField = optionsLiteral ? `\n  options = ${optionsLiteral};` : '';
     return `import "powerflow";
-${mdiImport}import { Component, ElementRef, ViewChild, AfterViewInit } from "@angular/core";
+${mdiImport}import { Component, CUSTOM_ELEMENTS_SCHEMA } from "@angular/core";
 
 @Component({
   selector: "app-power-flow",
-  template: \`<power-flow #pf></power-flow>\`,
+  template: \`<power-flow [data]="data"${optionsBinding}></power-flow>\`,
+  schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
-export class PowerFlowComponent implements AfterViewInit {
-  @ViewChild("pf") pf!: ElementRef;
-
-  ngAfterViewInit() {
-${assign('this.pf.nativeElement', '    ')}
-  }
+export class PowerFlowComponent {
+  data = ${dataLiteral};${optionsField}
 }`;
+  }
 
   if (fw === 'vue')
     return `<template>
-  <power-flow ref="pf" />
+  <power-flow :data="data" :options="options" />
 </template>
 
-<script setup>
+<script>
 import "powerflow";
-${mdiImport}import { ref, onMounted } from "vue";
-
-const pf = ref(null);
-onMounted(() => {
-${assign('pf.value', '  ')}
-});
+${mdiImport}
+export default {
+  data() {
+    return ${dataObj('    ')};
+  },
+};
 <\/script>`;
 
-  if (fw === 'svelte')
+  if (fw === 'svelte') {
+    // Svelte's compiler treats hyphenated tags as custom elements and sets
+    // non-string prop values as DOM properties, so `{data}` binds directly
+    // — no `bind:this`/`onMount` detour needed.
+    const { dataLiteral, optionsLiteral } = buildParts('  ');
+    const optionsDecl = optionsLiteral ? `\n  const options = ${optionsLiteral};` : '';
+    const optionsBinding = optionsLiteral ? ' {options}' : '';
     return `<script>
   import "powerflow";
-${mdiImport ? '  ' + mdiImport.trimEnd() + '\n' : ''}  import { onMount } from "svelte";
-  let pf;
-  onMount(() => {
-${assign('pf', '    ')}
-  });
+${mdiImport ? '  ' + mdiImport.trimEnd() + '\n' : ''}  const data = ${dataLiteral};${optionsDecl}
 <\/script>
 
-<power-flow bind:this={pf} />`;
+<power-flow {data}${optionsBinding} />`;
+  }
 
   return '';
 }
@@ -273,39 +378,102 @@ codeDialog.addEventListener('click', (e) => {
 );
 
 // ── URL state ─────────────────────────────────────────────────────────────────
-function encodeState(): URLSearchParams {
-  const p = new URLSearchParams();
-  p.set('hasSolar', hasSolar.checked ? '1' : '0');
-  p.set('hasBat', hasBat.checked ? '1' : '0');
-  p.set('hasC1', hasC1.checked ? '1' : '0');
-  p.set('hasC2', hasC2.checked ? '1' : '0');
-  p.set('hasC3', hasC3.checked ? '1' : '0');
-  p.set('hasC4', hasC4.checked ? '1' : '0');
-  p.set('hasBl', hasBl1.checked ? '1' : '0');
-  p.set('hasBl2', hasBl2.checked ? '1' : '0');
-  p.set('solar', inp.solar.value);
-  p.set('load', inp.load.value);
-  p.set('battery', inp.battery.value);
-  p.set('soc', inp.soc.value);
-  p.set('consumer1', inp.consumer1.value);
-  p.set('consumer2', inp.consumer2.value);
-  p.set('consumer3', inp.consumer3.value);
-  p.set('consumer4', inp.consumer4.value);
-  p.set('batteryLoad1', inp.batteryLoad1.value);
-  p.set('batteryLoad2', inp.batteryLoad2.value);
-  p.set('speed', speedInp.value);
-  for (const [k, i] of Object.entries(cinp)) {
-    if (i.value.toLowerCase() !== DEFAULT_COLORS[k].toLowerCase())
-      p.set('c_' + k, i.value.slice(1));
-  }
-  for (const k of TOPOLOGY_KEYS) {
-    if (!topoInp[k].checked) p.set('topo_' + k, '0');
-  }
-  return p;
+// The whole playground state lives behind one `s` query param — a base64url
+// JSON blob — instead of one query param per control, so shared links stay
+// short and readable rather than accumulating a new key every time a control
+// gets added.
+interface ShareState {
+  hasSolar: boolean;
+  hasBat: boolean;
+  hasC1: boolean;
+  hasC2: boolean;
+  hasC3: boolean;
+  hasC4: boolean;
+  hasBl1: boolean;
+  hasBl2: boolean;
+  solar: number;
+  load: number;
+  battery: number;
+  soc: number;
+  consumer1: number;
+  consumer2: number;
+  consumer3: number;
+  consumer4: number;
+  batteryLoad1: number;
+  batteryLoad2: number;
+  speed: number;
+  // Everything below is omitted when it's still at its default, to keep the
+  // common case (nobody touched the appearance controls) short.
+  nodeStyle?: string;
+  iconStyle?: true;
+  dotShape?: true;
+  curveBend?: number;
+  colors?: Record<string, string>;
+  topology?: Record<string, false>;
+}
+
+// btoa/atob work on a byte string, not UTF-16, hence the TextEncoder/Decoder
+// round-trip — not currently load-bearing (every field we encode is ASCII),
+// but keeps this safe if a future field (e.g. custom labels) isn't.
+function toBase64Url(json: string): string {
+  const bytes = new TextEncoder().encode(json);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function fromBase64Url(s: string): string {
+  const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+  const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+  return new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)));
+}
+
+function encodeState(): ShareState {
+  const state: ShareState = {
+    hasSolar: hasSolar.checked,
+    hasBat: hasBat.checked,
+    hasC1: hasC1.checked,
+    hasC2: hasC2.checked,
+    hasC3: hasC3.checked,
+    hasC4: hasC4.checked,
+    hasBl1: hasBl1.checked,
+    hasBl2: hasBl2.checked,
+    solar: +inp.solar.value,
+    load: +inp.load.value,
+    battery: +inp.battery.value,
+    soc: +inp.soc.value,
+    consumer1: +inp.consumer1.value,
+    consumer2: +inp.consumer2.value,
+    consumer3: +inp.consumer3.value,
+    consumer4: +inp.consumer4.value,
+    batteryLoad1: +inp.batteryLoad1.value,
+    batteryLoad2: +inp.batteryLoad2.value,
+    speed: +speedInp.value,
+  };
+  if (currentNodeStyle !== 'soft') state.nodeStyle = currentNodeStyle;
+  if (iconStyleInp.checked) state.iconStyle = true;
+  if (dotShapeInp.checked) state.dotShape = true;
+  if (+curveBendInp.value !== 1) state.curveBend = +curveBendInp.value;
+
+  const changedColors = Object.fromEntries(
+    Object.entries(cinp).filter(
+      ([k, i]) => i.value.toLowerCase() !== DEFAULT_COLORS[k].toLowerCase(),
+    ),
+  );
+  if (Object.keys(changedColors).length)
+    state.colors = Object.fromEntries(
+      Object.entries(changedColors).map(([k, i]) => [k, (i as HTMLInputElement).value]),
+    );
+
+  const changedTopology = Object.fromEntries(
+    TOPOLOGY_KEYS.filter((k) => !topoInp[k].checked).map((k) => [k, false as const]),
+  );
+  if (Object.keys(changedTopology).length) state.topology = changedTopology;
+
+  return state;
 }
 
 function syncUrl() {
-  history.replaceState(null, '', '?' + encodeState());
+  history.replaceState(null, '', '?s=' + toBase64Url(JSON.stringify(encodeState())));
 }
 
 // Fired by playground-colors.ts (reset colors) and playground-testcases.ts
@@ -324,6 +492,9 @@ document.addEventListener('pf:statechange', syncUrl);
   hasBl1,
   hasBl2,
   speedInp,
+  iconStyleInp,
+  dotShapeInp,
+  curveBendInp,
   ...Object.values(cinp),
   ...Object.values(topoInp),
 ].forEach((i) => i.addEventListener('input', syncUrl));
@@ -339,42 +510,58 @@ copyLinkBtn.addEventListener('click', () => {
 });
 
 (function loadFromURL() {
-  if (!location.search) return;
-  const p = new URLSearchParams(location.search);
-  if (p.has('hasSolar')) hasSolar.checked = p.get('hasSolar') === '1';
-  if (p.has('hasBat')) hasBat.checked = p.get('hasBat') === '1';
-  if (p.has('hasC1')) hasC1.checked = p.get('hasC1') === '1';
-  if (p.has('hasC2')) hasC2.checked = p.get('hasC2') === '1';
-  if (p.has('hasC3')) hasC3.checked = p.get('hasC3') === '1';
-  if (p.has('hasC4')) hasC4.checked = p.get('hasC4') === '1';
-  if (p.has('hasBl')) hasBl1.checked = p.get('hasBl') === '1';
-  if (p.has('hasBl2')) hasBl2.checked = p.get('hasBl2') === '1';
-  if (p.has('solar')) inp.solar.value = p.get('solar')!;
-  if (p.has('battery')) inp.battery.value = p.get('battery')!;
-  if (p.has('soc')) inp.soc.value = p.get('soc')!;
-  if (p.has('consumer1')) inp.consumer1.value = p.get('consumer1')!;
-  if (p.has('consumer2')) inp.consumer2.value = p.get('consumer2')!;
-  if (p.has('consumer3')) inp.consumer3.value = p.get('consumer3')!;
-  if (p.has('consumer4')) inp.consumer4.value = p.get('consumer4')!;
-  if (p.has('batteryLoad1')) inp.batteryLoad1.value = p.get('batteryLoad1')!;
-  if (p.has('batteryLoad2')) inp.batteryLoad2.value = p.get('batteryLoad2')!;
-  if (p.has('speed')) {
-    speedInp.value = p.get('speed')!;
-    vSpeed.textContent = `${p.get('speed')}×`;
-    el.speedScale = Number(p.get('speed'));
+  const raw = new URLSearchParams(location.search).get('s');
+  if (!raw) return;
+  let s: ShareState;
+  try {
+    s = JSON.parse(fromBase64Url(raw));
+  } catch {
+    return; // malformed (or pre-single-param) link — fall back to defaults
   }
+
+  hasSolar.checked = s.hasSolar;
+  hasBat.checked = s.hasBat;
+  hasC1.checked = s.hasC1;
+  hasC2.checked = s.hasC2;
+  hasC3.checked = s.hasC3;
+  hasC4.checked = s.hasC4;
+  hasBl1.checked = s.hasBl1;
+  hasBl2.checked = s.hasBl2;
+  inp.solar.value = String(s.solar);
+  inp.battery.value = String(s.battery);
+  inp.soc.value = String(s.soc);
+  inp.consumer1.value = String(s.consumer1);
+  inp.consumer2.value = String(s.consumer2);
+  inp.consumer3.value = String(s.consumer3);
+  inp.consumer4.value = String(s.consumer4);
+  inp.batteryLoad1.value = String(s.batteryLoad1);
+  inp.batteryLoad2.value = String(s.batteryLoad2);
+
+  speedInp.value = String(s.speed);
+  vSpeed.textContent = `${s.speed}×`;
+  el.options = { ...el.options, speedScale: s.speed };
+
+  if (s.nodeStyle === 'soft' || s.nodeStyle === 'tonal' || s.nodeStyle === 'outline' || s.nodeStyle === 'filled')
+    setNodeStyle(s.nodeStyle);
+  iconStyleInp.checked = s.iconStyle ?? false;
+  el.options = { ...el.options, iconStyle: iconStyleInp.checked ? 'full' : 'default' };
+  dotShapeInp.checked = s.dotShape ?? false;
+  el.options = { ...el.options, dotShape: dotShapeInp.checked ? 'triangle' : 'circle' };
+  curveBendInp.value = String(s.curveBend ?? 1);
+  vCurveBend.textContent = `${curveBendInp.value}×`;
+  el.options = { ...el.options, curveBend: +curveBendInp.value };
+
   for (const [k, i] of Object.entries(cinp)) {
-    const v = p.get('c_' + k);
-    if (v) i.value = '#' + v;
+    const v = s.colors?.[k];
+    if (v) i.value = v;
   }
   for (const k of TOPOLOGY_KEYS) {
-    if (p.has('topo_' + k)) topoInp[k].checked = p.get('topo_' + k) !== '0';
+    topoInp[k].checked = s.topology?.[k] !== false;
   }
+
   applyColors();
   updateLoadMin();
-  if (p.has('load')) {
-    inp.load.value = p.get('load')!;
-    updateGrid();
-  }
+  inp.load.value = String(s.load);
+  updateGrid();
   syncUrl();
 })();

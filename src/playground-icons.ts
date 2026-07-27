@@ -64,8 +64,8 @@ export const ICON_NAMES: Record<string, string> = {
 // Shared with playground-appliances.ts, which mutates the consumer-slot
 // keys directly (object mutation, not reassignment — reassigning an
 // imported binding isn't allowed, but writing its properties is) and then
-// re-sets `el.icons` itself. Kept as one object so neither module's
-// `el.icons = ...` call ever clobbers the other's choices.
+// re-sets `el.options.icons` itself. Kept as one object so neither module's
+// `el.options = { icons: ... }` call ever clobbers the other's choices.
 export const currentIcons: Record<string, string> = { ...DEFAULT_ICONS };
 
 (document.getElementById('shuffle-icons') as HTMLElement).addEventListener(
@@ -74,13 +74,13 @@ export const currentIcons: Record<string, string> = { ...DEFAULT_ICONS };
     for (const [k, opts] of Object.entries(ICON_OPTIONS)) {
       currentIcons[k] = opts[Math.floor(Math.random() * opts.length)];
     }
-    el.icons = currentIcons;
+    el.options = { ...el.options, icons: currentIcons };
   },
 );
 (document.getElementById('reset-icons') as HTMLElement).addEventListener(
   'click',
   () => {
     Object.assign(currentIcons, STRUCTURAL_DEFAULT_ICONS);
-    el.icons = currentIcons;
+    el.options = { ...el.options, icons: currentIcons };
   },
 );
