@@ -1,6 +1,6 @@
 {
   "name": "powerflow",
-  "version": "2.0.0",
+  "version": "1.0.0",
   "description": "Animated, framework-agnostic SVG energy-flow diagram — solar, grid, home, battery and wallbox with power-proportional flow animation. Ships as a <power-flow> Web Component and a vanilla API; works with React, Angular, Vue or plain HTML.",
   "type": "module",
   "license": "MIT",
