@@ -1,4 +1,4 @@
-import { el, notifyStateChange } from './playground-dom';
+import { el } from './playground-dom';
 
 export const colorIds: Record<string, string> = {
   solar: 'c-solar',
@@ -33,11 +33,9 @@ export function applyColors() {
 Object.values(cinp).forEach((i) => i.addEventListener('input', applyColors));
 applyColors();
 
-(document.getElementById('reset-colors') as HTMLElement).addEventListener(
-  'click',
-  () => {
-    for (const [k, i] of Object.entries(cinp)) i.value = DEFAULT_COLORS[k];
-    applyColors();
-    notifyStateChange();
-  },
-);
+// Exported for the global "Reset" button (playground-reset.ts) — this
+// module no longer has its own dedicated reset-colors button.
+export function resetColors() {
+  for (const [k, i] of Object.entries(cinp)) i.value = DEFAULT_COLORS[k];
+  applyColors();
+}

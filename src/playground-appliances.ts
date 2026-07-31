@@ -14,8 +14,9 @@ import {
   mdiToolbox,
   mdiFridgeIndustrial,
 } from '@mdi/js';
+import { DEFAULT_LABELS } from './defaults';
 import { el } from './playground-dom';
-import { currentIcons } from './playground-icons';
+import { currentIcons, DEFAULT_ICONS } from './playground-icons';
 
 // Demonstrates that consumer1/consumer2/consumer3/consumer4/batteryLoad1/
 // batteryLoad2 aren't specifically about EV charging — they're generic
@@ -94,6 +95,16 @@ function shuffleAppliances() {
 
 const appliancesBtn = document.getElementById('shuffle-appliances') as HTMLElement;
 appliancesBtn.addEventListener('click', shuffleAppliances);
+
+// Undoes shuffleAppliances() — back to the library's own generic slot
+// defaults ("Consumer 1", a plain power socket icon, ...) rather than
+// re-shuffling to a new random pick. Exported for the global "Reset" button
+// (playground-reset.ts).
+export function resetAppliances() {
+  currentLabels = null;
+  for (const slot of SLOTS) currentIcons[slot] = DEFAULT_ICONS[slot];
+  el.options = { ...el.options, labels: DEFAULT_LABELS, icons: currentIcons };
+}
 
 // Shuffle once up front so the playground opens with varied, realistic
 // appliance names/icons in the consumer slots instead of the generic

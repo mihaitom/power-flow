@@ -10,4 +10,5 @@ import './playground-appliances';
 import './playground-state';
 import './playground-simulate';
 import './playground-testcases';
+import './playground-reset';
 import './playground-share';

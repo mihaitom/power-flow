@@ -26,21 +26,21 @@ consumer slots** — with dots whose speed is proportional to the actual power.
 
 Same component, four looks — all just an <a href="#nodestyle"><code>options.nodeStyle</code></a> away:
 
-<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-outline.gif" alt="powerflow — outline node style, showing all four consumer slots plus a battery-fed load at once" height="420" />
+<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-outline.gif" alt="powerflow — outline node style with chevron flow dots, showing all four consumer slots plus a battery-fed load at once" height="420" />
 
-<sub><code>outline</code> — the extra column only appears because this scenario actually uses <code>consumer3</code>/<code>consumer4</code>.</sub>
-
-<br /><br />
-
-<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-filled.gif" alt="powerflow — filled node style with full-size background icons and arrowhead flow dots, a balcony PV setup wired to charge only the battery" height="420" />
-
-<sub><code>filled</code> — a balcony-PV <a href="#flowtopology"><code>topology</code></a> where solar can only reach the battery, plus <a href="#iconstyle"><code>iconStyle: 'full'</code></a> and <a href="#dotshape"><code>dotShape: 'triangle'</code></a> on top.</sub>
+<sub><code>outline</code> — the extra column only appears because this scenario actually uses <code>consumer3</code>/<code>consumer4</code>, plus <a href="#dotshape"><code>dotShape: 'chevron'</code></a>.</sub>
 
 <br /><br />
 
-<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-tonal.gif" alt="powerflow — tonal node style" height="420" />
+<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-filled.gif" alt="powerflow — filled node style with full-size background icons and lightning-bolt flow dots, a balcony PV setup wired to charge only the battery" height="420" />
 
-<sub><code>tonal</code> — an opaque, muted fill with no ring.</sub>
+<sub><code>filled</code> — a balcony-PV <a href="#flowtopology"><code>topology</code></a> where solar can only reach the battery, plus <a href="#iconstyle"><code>iconStyle: 'full'</code></a> and <a href="#dotshape"><code>dotShape: 'bolt'</code></a> on top.</sub>
+
+<br /><br />
+
+<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-tonal.gif" alt="powerflow — tonal node style with sparkle flow dots" height="420" />
+
+<sub><code>tonal</code> — an opaque, muted fill with no ring, plus <a href="#dotshape"><code>dotShape: 'spark'</code></a>.</sub>
 
 </div>
 
@@ -66,14 +66,19 @@ crisp scalable vectors; no runtime framework dependency.
   [power-flow-card-plus](https://github.com/flixlix/power-flow-card-plus).
 - **Coverage rings** — home ring shows load sources (solar / battery / grid);
   grid ring shows export sources; battery ring shows state of charge.
+- **Battery charge/discharge highlight** — a bright comet spins around the
+  battery's state-of-charge ring while charging or discharging, color-coded
+  by direction; toggleable via `options.batteryChargeHighlight`.
 - **Themeable** — every node colour (including separate charge/discharge colours
   for battery and grid), every label, and every node icon is overridable.
 - **Four node styles** — soft, tonal, outline or filled, switchable live via
   `options.nodeStyle` (see the examples above).
 - **Adjustable animation** — dot speed multiplier lets you slow down or speed up
   the flow independently of the power values.
-- **Configurable look** — full-size background icons, arrow-shaped flow dots,
-  and adjustable curve bend are all opt-in via `options.iconStyle`/`options.dotShape`/`options.curveBend`.
+- **Configurable look** — full-size background icons, five flow-dot shapes
+  (circle, triangle, bolt, chevron, spark), multiple evenly-spaced dots per
+  flow, and adjustable curve bend are all opt-in via
+  `options.iconStyle`/`options.dotShape`/`options.dotCount`/`options.curveBend`.
 - **Tiny & isolated** — ~11 kB min+gzip, zero runtime deps, shadow DOM so its
   styles never leak into your app.
 
@@ -215,8 +220,12 @@ leak into your app.
 | `speedScale` | `number`                 | Dot speed multiplier. `1` = default, `2` = twice as fast.  |
 | `nodeStyle`  | `'soft' \| 'tonal' \| 'outline' \| 'filled'` | How each node's background/ring/icon/text are painted. Default `'soft'`. |
 | `iconStyle`  | `'default' \| 'full'`    | `'full'` draws each icon large behind its value/label text. Default `'default'`. |
-| `dotShape`   | `'circle' \| 'triangle'` | `'triangle'` draws flow dots as arrowheads pointing in their direction of travel. Default `'circle'`. |
-| `curveBend`  | `number`                 | Shape of the diagram's curved connections. `0` = straight lines, `1` = the standard curve (default), up to `2` = straighter departure/arrival with a sharper turn. |
+| `dotShape`   | `'circle' \| 'triangle' \| 'bolt' \| 'chevron' \| 'spark'` | Shape of the animated flow dots — `'triangle'`/`'bolt'`/`'chevron'`/`'spark'` all orient themselves along their direction of travel. Default `'circle'`. |
+| `dotCount`   | `number`                 | Number of dots animated per active flow line, evenly spaced along the path. Default `1`. Clamped to `1–8`; the short home↔consumer1/2 and battery↔batteryLoad1/2 connections always cap at 2. |
+| `curveBend`  | `number`                 | Shape of the diagram's curved connections. `0` = straight lines, `1` = the standard curve (default), up to `2.5` = straighter departure/arrival with a sharper turn. |
+| `rowGap`     | `number`                 | Vertical spacing (px) between the middle row (grid/home) and the top/bottom rows. Default `125`. Clamped to `110–180`. |
+| `columnGap`  | `number`                 | Horizontal spacing (px) between adjacent columns. Default `145`. Clamped to `110–180`. |
+| `batteryChargeHighlight` | `boolean`    | Whether the battery's SoC ring shows an animated highlight while charging/discharging. Default `true`; set `false` for a plain static ring. |
 
 `options` is set as a whole (`pf.options = { iconStyle: 'full' }`) rather than
 merged automatically — pass along whatever previous fields you want to keep,
@@ -395,9 +404,25 @@ pf.options = { ...pf.options, iconStyle: 'default' }; // small icon above the te
 ### `dotShape`
 
 ```ts
-pf.options = { ...pf.options, dotShape: 'triangle' }; // small arrowheads that point in their flow direction
 pf.options = { ...pf.options, dotShape: 'circle' }; // plain circles (the default)
+pf.options = { ...pf.options, dotShape: 'triangle' }; // small arrowheads that point in their flow direction
+pf.options = { ...pf.options, dotShape: 'bolt' }; // a small lightning bolt
+pf.options = { ...pf.options, dotShape: 'chevron' }; // a slim "›" pointing in the flow direction
+pf.options = { ...pf.options, dotShape: 'spark' }; // a small 4-point sparkle
 ```
+
+`'triangle'`, `'bolt'` and `'chevron'` all orient themselves along their current direction of travel, the same way `'triangle'` always has. `'spark'` rotates along too, but being symmetric it looks the same regardless.
+
+### `dotCount`
+
+```ts
+pf.options = { ...pf.options, dotCount: 1 }; // one traveling dot per flow (the default)
+pf.options = { ...pf.options, dotCount: 4 }; // 4 dots, evenly spaced along each active flow line
+```
+
+The short direct connections between grid-adjacent nodes (home↔consumer1/2,
+battery↔batteryLoad1/2) always cap at 2 dots regardless of `dotCount` — their
+path is too short for more to read as separate dots rather than a blur.
 
 ### `curveBend`
 
@@ -409,10 +434,26 @@ further from a straight line:
 ```ts
 pf.options = { ...pf.options, curveBend: 0 }; // straightens every curve into a direct line
 pf.options = { ...pf.options, curveBend: 1 }; // the standard curve (the default)
-pf.options = { ...pf.options, curveBend: 2 }; // longer straight run out of/into each node, with a
-// sharper turn in between (the maximum — kept at 2 so curves don't cross
+pf.options = { ...pf.options, curveBend: 2.5 }; // longer straight run out of/into each node, with a
+// sharper turn in between (the maximum — kept at 2.5 so curves don't cross
 // neighboring nodes)
 ```
+
+### `rowGap` / `columnGap`
+
+The diagram sits on a grid: columns run left-to-right `columnGap` px apart
+(grid/batteryLoad1 → solar/battery → home → consumer3/consumer4), and rows sit
+`rowGap` px above/below the fixed middle row (grid/home). Home's own column
+and grid/home's shared row are always fixed — only the *other* rows/columns
+move:
+
+```ts
+pf.options = { ...pf.options, rowGap: 125 }; // the default — slightly tighter than the column gap
+pf.options = { ...pf.options, rowGap: 145 }; // matches the column gap exactly, for a fully even grid
+pf.options = { ...pf.options, columnGap: 145 }; // the default
+```
+
+Both are clamped to `110–180`.
 
 ## How the flows are computed
 

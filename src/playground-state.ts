@@ -51,6 +51,11 @@ export function apply() {
     hasSolar.checked ? '1' : '0.4';
   (document.getElementById('battery-ctrls') as HTMLElement).style.opacity =
     hasBat.checked ? '1' : '0.4';
+  // Meaningless without a battery (applyBatteryHighlight() in core.ts is
+  // already a no-op then) — dim it the same way battery-ctrls dims, so it
+  // reads as "currently irrelevant" rather than a live, independent toggle.
+  (document.getElementById('battery-charge-highlight-ctrl') as HTMLElement).style.opacity =
+    hasBat.checked ? '1' : '0.4';
   (document.getElementById('consumer1-ctrls') as HTMLElement).style.opacity =
     hasC1.checked ? '1' : '0.4';
   (document.getElementById('consumer2-ctrls') as HTMLElement).style.opacity =
@@ -121,9 +126,30 @@ const iconStyleInp = document.getElementById('icon-style-full') as HTMLInputElem
 iconStyleInp.addEventListener('input', () => {
   el.options = { ...el.options, iconStyle: iconStyleInp.checked ? 'full' : 'default' };
 });
-const dotShapeInp = document.getElementById('dot-shape-triangle') as HTMLInputElement;
-dotShapeInp.addEventListener('input', () => {
-  el.options = { ...el.options, dotShape: dotShapeInp.checked ? 'triangle' : 'circle' };
+const DOT_SHAPES = ['circle', 'triangle', 'bolt', 'chevron', 'spark'] as const;
+export let currentDotShape: (typeof DOT_SHAPES)[number] = 'circle';
+const dotShapeTabsEl = document.getElementById('dot-shape-tabs') as HTMLElement;
+export function setDotShape(shape: (typeof DOT_SHAPES)[number]) {
+  currentDotShape = shape;
+  dotShapeTabsEl.querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('on', (b as HTMLElement).dataset.dotShape === shape);
+  });
+  el.options = { ...el.options, dotShape: shape };
+}
+dotShapeTabsEl.querySelectorAll('button').forEach((b) => {
+  b.addEventListener('click', () => {
+    setDotShape((b as HTMLElement).dataset.dotShape as (typeof DOT_SHAPES)[number]);
+    notifyStateChange();
+  });
+});
+const batteryChargeHighlightInp = document.getElementById(
+  'battery-charge-highlight',
+) as HTMLInputElement;
+batteryChargeHighlightInp.addEventListener('input', () => {
+  el.options = {
+    ...el.options,
+    batteryChargeHighlight: batteryChargeHighlightInp.checked,
+  };
 });
 const curveBendInp = document.getElementById('curve-bend') as HTMLInputElement;
 const vCurveBend = document.getElementById('v-curve-bend') as HTMLElement;
@@ -132,7 +158,39 @@ curveBendInp.addEventListener('input', () => {
   vCurveBend.textContent = `${curveBendInp.value}×`;
   el.options = { ...el.options, curveBend: Number(curveBendInp.value) };
 });
-export { iconStyleInp, dotShapeInp, curveBendInp, vCurveBend };
+const dotCountInp = document.getElementById('dot-count') as HTMLInputElement;
+const vDotCount = document.getElementById('v-dot-count') as HTMLElement;
+vDotCount.textContent = dotCountInp.value;
+dotCountInp.addEventListener('input', () => {
+  vDotCount.textContent = dotCountInp.value;
+  el.options = { ...el.options, dotCount: Number(dotCountInp.value) };
+});
+const rowGapInp = document.getElementById('row-gap') as HTMLInputElement;
+const vRowGap = document.getElementById('v-row-gap') as HTMLElement;
+vRowGap.textContent = `${rowGapInp.value}px`;
+rowGapInp.addEventListener('input', () => {
+  vRowGap.textContent = `${rowGapInp.value}px`;
+  el.options = { ...el.options, rowGap: Number(rowGapInp.value) };
+});
+const columnGapInp = document.getElementById('column-gap') as HTMLInputElement;
+const vColumnGap = document.getElementById('v-column-gap') as HTMLElement;
+vColumnGap.textContent = `${columnGapInp.value}px`;
+columnGapInp.addEventListener('input', () => {
+  vColumnGap.textContent = `${columnGapInp.value}px`;
+  el.options = { ...el.options, columnGap: Number(columnGapInp.value) };
+});
+export {
+  iconStyleInp,
+  batteryChargeHighlightInp,
+  curveBendInp,
+  vCurveBend,
+  dotCountInp,
+  vDotCount,
+  rowGapInp,
+  vRowGap,
+  columnGapInp,
+  vColumnGap,
+};
 
 // ── Slider logic ──────────────────────────────────────────────────────────────
 const consumer1Inp = document.getElementById('consumer1') as HTMLInputElement;

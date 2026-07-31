@@ -77,10 +77,12 @@ export const currentIcons: Record<string, string> = { ...DEFAULT_ICONS };
     el.options = { ...el.options, icons: currentIcons };
   },
 );
-(document.getElementById('reset-icons') as HTMLElement).addEventListener(
-  'click',
-  () => {
-    Object.assign(currentIcons, STRUCTURAL_DEFAULT_ICONS);
-    el.options = { ...el.options, icons: currentIcons };
-  },
-);
+// Resets only the 4 structural node icons (solar/grid/home/battery) —
+// consumer1-4/batteryLoad1/batteryLoad2 are appliance-owned, see
+// playground-appliances.ts's resetAppliances(). Exported for the global
+// "Reset" button (playground-reset.ts); this module no longer has its own
+// dedicated reset button.
+export function resetStructuralIcons() {
+  Object.assign(currentIcons, STRUCTURAL_DEFAULT_ICONS);
+  el.options = { ...el.options, icons: currentIcons };
+}

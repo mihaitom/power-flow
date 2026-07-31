@@ -110,6 +110,9 @@ export interface FlowIcons {
  *    switched to a uniform white with a drop shadow for contrast. */
 export type NodeStyle = 'soft' | 'tonal' | 'outline' | 'filled';
 
+/** Shape of the animated flow dots — see `PowerFlowSettings.dotShape`. */
+export type DotShape = 'circle' | 'triangle' | 'bolt' | 'chevron' | 'spark';
+
 /** Everything about the diagram other than the live `data` itself: colors,
  *  labels, icons, topology, and presentation/behavior tuning knobs. */
 export interface PowerFlowSettings {
@@ -125,16 +128,49 @@ export interface PowerFlowSettings {
   /** `'full'` draws each node's icon large behind the value/label text
    *  (dimmed, as a background) instead of small above it. Default `'default'`. */
   iconStyle: 'default' | 'full';
-  /** `'triangle'` draws flow dots as small arrowheads that point in their
-   *  direction of travel, instead of plain circles. Default `'circle'`. */
-  dotShape: 'circle' | 'triangle';
+  /** Shape of the animated flow dots. `'circle'` (default) is a plain dot.
+   *  `'triangle'` draws small arrowheads pointing in their direction of
+   *  travel. `'bolt'` draws a small lightning bolt. `'chevron'` draws a
+   *  slim "›" pointing in the direction of travel. `'spark'` draws a small
+   *  4-point sparkle/star. `'triangle'`, `'bolt'` and `'chevron'` all
+   *  orient themselves along their direction of travel; `'spark'` doesn't
+   *  need to (it's symmetric) but rotates along too, for no visual
+   *  difference. */
+  dotShape: DotShape;
+  /** Number of dots animated per active flow line, evenly spaced along the
+   *  path. `1` (the default) is the classic single traveling dot. Clamped
+   *  internally to `1–8`. The four short direct connections between
+   *  grid-adjacent nodes (home↔consumer1/2, battery↔batteryLoad1/2) always
+   *  cap at 2 regardless of this value — their path is too short for more
+   *  dots to read as distinct. */
+  dotCount: number;
   /** Scales the diagram's curved connections by stretching/shrinking how far
    *  each one travels in its fixed departure/arrival direction before
    *  turning. `0` collapses them into direct lines, `1` (the default) is
    *  the standard curve, values above `1` hold the straight direction longer
-   *  with a sharper turn in between. Clamped to `0–2` internally to keep curves
-   *  from crossing neighboring nodes. */
+   *  with a sharper turn in between. Clamped to `0–2.5` internally to keep
+   *  curves from crossing neighboring nodes. */
   curveBend: number;
+  /** Vertical center-to-center distance (in px) between the middle row
+   *  (grid/home) and the top/bottom rows (solar/consumer1/consumer3 and
+   *  battery/consumer2/consumer4/batteryLoad1/batteryLoad2). Default `125` —
+   *  the diagram's original spacing, slightly tighter than the fixed 145px
+   *  horizontal column gap. Set to `145` to match the column gap exactly, or
+   *  any other value. Clamped internally to `110–180` (below 110 the top/
+   *  bottom rows would crowd the middle row; above 180 the diagram reads as
+   *  overly stretched-out). */
+  rowGap: number;
+  /** Horizontal center-to-center distance (in px) between adjacent columns —
+   *  grid/batteryLoad1, solar/battery, home (fixed anchor — never moves),
+   *  and consumer3/consumer4, each `columnGap` px from the next. Default
+   *  `145` — the diagram's original, always-shipped spacing. Clamped
+   *  internally to `110–180`, for the same reason as `rowGap`. */
+  columnGap: number;
+  /** Whether the battery's SoC ring shows an animated highlight (a bright
+   *  comet that spins around the charged portion of the ring) while
+   *  charging/discharging. Default `true`. Set `false` for a plain static
+   *  ring with no motion. */
+  batteryChargeHighlight: boolean;
 }
 
 export interface PowerFlowOptions {
