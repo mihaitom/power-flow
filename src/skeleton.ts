@@ -9,6 +9,84 @@ import {
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
+// Circumference of the r=47 coverage/SoC/charge-highlight rings (home/grid
+// coverage arcs, battery SoC arc, battery charge-highlight comet) — shared
+// so core.ts doesn't hardcode its own copy of 2·π·47.
+export const ARC_LENGTH = 2 * Math.PI * 47; // ≈ 295.31
+
+// Angular length of the comet head's dash, converted to the px length
+// stroke-dasharray needs — short relative to ARC_LENGTH so the comet reads
+// as a localized highlight, not a second progress arc. Baked into each
+// band's stroke-dasharray directly in the markup since it's a constant —
+// only stroke-dashoffset changes at runtime, and it's driven from core.ts's
+// own animation loop rather than a CSS animation (see BATTERY_COMET_LAYERS
+// below for why).
+const BAT_COMET_HEAD_DEG = 5;
+const BAT_COMET_DASH = (ARC_LENGTH * BAT_COMET_HEAD_DEG) / 360;
+const BAT_COMET_DASHARRAY = `${BAT_COMET_DASH} ${ARC_LENGTH - BAT_COMET_DASH}`;
+const BAT_COMET_TAIL_SEGMENTS = 5;
+const BAT_COMET_TAIL_STEP_DEG = 2.2; // successive bands are 2.2° further behind the head
+
+// Every layer batteryCometMarkup() below generates, each with how far behind
+// the head it trails as a 0..1 fraction of one full lap — exported so
+// core.ts's tick loop can position every layer's stroke-dashoffset itself
+// (see the .bat-charge-* CSS comment for why a plain CSS animation can't
+// drive this) without duplicating this module's tail geometry, and so
+// applyLayout() can reposition all of them (along with bat-soc-mask-arc)
+// when rowGap/columnGap move the battery node, the same way it already
+// repositions bat-soc-arc itself.
+export const BATTERY_COMET_LAYERS: { id: string; delay: number }[] = [
+  { id: 'bat-charge-bloom', delay: 0 },
+  { id: 'bat-charge-glow', delay: 0 },
+  { id: 'bat-charge-core', delay: 0 },
+  ...Array.from({ length: BAT_COMET_TAIL_SEGMENTS }, (_, i) => {
+    const n = i + 1;
+    return { id: `bat-charge-tail-${n}`, delay: (n * BAT_COMET_TAIL_STEP_DEG) / 360 };
+  }),
+];
+
+// Builds the battery charge/discharge "comet": a three-layer bright head
+// (bloom/glow/core — three different blur radii stacked for visual depth,
+// the way a real bloom/glow render is layered rather than a single blurred
+// shape) followed by a smoothly tapering tail of many thin trailing bands.
+// SVG has no conic-gradient, and a stroke gradient can't stay attached to a
+// shape animated via stroke-dashoffset (its coordinates don't travel with
+// the dash), so the fade is approximated by generating enough discrete tail
+// bands that the eye reads it as continuous — see the .bat-charge-tail CSS
+// comment for how they stay attached to the head via BATTERY_COMET_LAYERS'
+// `delay` instead. Each band's opacity/width/blur follow an eased (squared)
+// falloff rather than a linear one so the tail thins out gradually near the
+// head and disappears quickly toward its faint end, closer to how a real
+// glow actually falls off than a straight ramp would look.
+function batteryCometMarkup(cx: number, cy: number): string {
+  const arc = (id: string, extraAttrs: string) =>
+    `<circle id="${id}" cx="${cx}" cy="${cy}" r="47" stroke-dasharray="${BAT_COMET_DASHARRAY}" transform="rotate(-90 ${cx} ${cy})" ${extraAttrs} />`;
+
+  const tail = BATTERY_COMET_LAYERS.filter((l) => l.delay > 0)
+    .map(({ id }, i) => {
+      const n = i + 1;
+      const t = n / BAT_COMET_TAIL_SEGMENTS; // 0 (nearest the head) .. 1 (tail's faint end)
+      const fade = (1 - t) ** 2;
+      const opacity = (0.4 * fade).toFixed(3);
+      const width = (9 - t * 5.5).toFixed(1);
+      const blur = (3 + t * 8).toFixed(1);
+      return arc(
+        id,
+        `class="bat-charge-tail" style="opacity: ${opacity}; stroke-width: ${width}; filter: blur(${blur}px)"`,
+      );
+    })
+    .reverse() // paint the faintest/furthest band first so the head stays on top
+    .join('\n      ');
+
+  const head = [
+    arc('bat-charge-bloom', 'class="bat-charge-bloom"'),
+    arc('bat-charge-glow', 'class="bat-charge-glow"'),
+    arc('bat-charge-core', 'class="bat-charge-core"'),
+  ].join('\n      ');
+
+  return `${tail}\n      ${head}`;
+}
+
 // MDI paths live in a 24×24 box. We draw native SVG paths instead of
 // foreignObject because Safari/WebKit mis-positions foreignObject inside
 // scaled SVGs. Centers the icon at (centerX, centerY) and scales it to size.
@@ -110,6 +188,70 @@ export const DOTS: {
 // never need to be created/destroyed at runtime.
 export const MAX_DOTS_PER_TRACK = 8;
 
+// The three non-'circle' dot shapes (see DotShape in types.ts) — each drawn
+// as a small shape pointing along +x (its own "forward"), wrapped in a <g>
+// so core.ts's placeMarker() can position *and* rotate it every frame with a
+// single `transform` attribute (translate to the current path point, rotate
+// to the current direction of travel — exactly like the long-standing
+// 'triangle' shape). The inner shape carries the shrink pop-in/out CSS
+// transition instead of the wrapper (see the CSS comment below for why
+// those can't be the same element) — `idPrefix` is that inner element's id
+// prefix (`dot-${idPrefix}-${trackId}-${i}`), and `inner(cls)` builds it,
+// `cls` being the same per-track color class every other dot shape uses.
+// Exported so core.ts's initDots() can look up the same three shapes by the
+// same ids without a second hardcoded list to keep in sync.
+export const ORIENTED_DOT_SHAPES: {
+  shape: 'triangle' | 'bolt' | 'chevron' | 'spark';
+  idPrefix: string;
+  wrapClass: string;
+  inner: (cls: string) => string;
+}[] = [
+  {
+    shape: 'triangle',
+    idPrefix: 'tri',
+    wrapClass: 'dot-tri-wrap',
+    inner: (cls) =>
+      `<polygon points="-4,-3.5 -4,3.5 6,0" class="dot dot-tri ${cls}" vector-effect="non-scaling-stroke" />`,
+  },
+  // A small lightning bolt, tip leading in the direction of travel (same
+  // "forward = +x" convention as the triangle) — the classic zigzag glyph
+  // (mdiLightningBolt's own outline, just rotated 90° and rescaled to this
+  // module's -6..6 marker envelope instead of a straight arrowhead).
+  {
+    shape: 'bolt',
+    idPrefix: 'bolt',
+    wrapClass: 'dot-bolt-wrap',
+    inner: (cls) =>
+      `<polygon points="1.7,0.6 1.7,3.3 -6,-0.6 -1.7,-0.6 -1.7,-3.3 6,0.6" class="dot dot-bolt ${cls}" vector-effect="non-scaling-stroke" />`,
+  },
+  // A slim "›" — a lighter, less "arrow-like" alternative to the solid
+  // triangle. Stroked (open path, unclosed), with a sharp miter/round-cap
+  // treatment (see the CSS comment below) so its point stays crisp. Scaled
+  // to the same rough ±3.5 vertical envelope as the triangle rather than
+  // the marker module's usual ±6 — a "›" that wide reads oversized next to
+  // the other shapes, since unlike them its two open arms are its *whole*
+  // silhouette (nothing filling the space between).
+  {
+    shape: 'chevron',
+    idPrefix: 'chevron',
+    wrapClass: 'dot-chevron-wrap',
+    inner: (cls) =>
+      `<path d="M-3,-3.5 L3,0 L-3,3.5" class="dot dot-chevron ${cls}" vector-effect="non-scaling-stroke" fill="none" />`,
+  },
+  // A small 4-point sparkle/star — symmetric, so it doesn't *need* to orient
+  // with travel direction the way the others do, but rotates along anyway
+  // (via the same shared machinery) since a symmetric shape looks identical
+  // either way — no special-casing needed. Outer tips at N/E/S/W, concave
+  // inner points at the diagonals, the classic "✦" silhouette.
+  {
+    shape: 'spark',
+    idPrefix: 'spark',
+    wrapClass: 'dot-spark-wrap',
+    inner: (cls) =>
+      `<polygon points="0,-6 1.3,-1.3 6,0 1.3,1.3 0,6 -1.3,1.3 -6,0 -1.3,-1.3" class="dot dot-spark ${cls}" vector-effect="non-scaling-stroke" />`,
+  },
+];
+
 // Maps a dot's `cls` to the `--sfd-*` custom property holding its color, so a
 // track can be recolored to match the dot currently traveling along it (see
 // the track-coloring pass in `update()`). Only `grid` doesn't match its CSS
@@ -140,57 +282,63 @@ export function trackIdFor(pathId: string): string {
 // (vertical) and arrives at its grid/home-side node straight (horizontal),
 // fanned out ±12 from that node's own center — 51 short of the node's edge
 // (radius 52) so the fan-out reads as a deliberate offset, not a stray gap.
-// The tangent handle length (38, giving p1/p2 their offset from p0/p3) is a
-// fixed visual choice independent of `rowGap`/`columnGap` — see the
-// curveBend comment on this function's usage for why that's fine even as
-// the travel distance changes with either gap.
+// The tangent handle length (38 at the default rowGap/columnGap, giving p1/
+// p2 their offset from p0/p3) scales with whichever gap governs that leg's
+// travel distance — vertical handles with rowGap, horizontal handles with
+// columnGap — so curveBend's "straight run, then a sharp turn" character
+// (see applyCurveBend()'s own comment) stays proportionally the same shape
+// as the diagram is stretched, instead of a fixed-length handle shrinking
+// to a sliver of the total travel (and the curve reverting to one plain
+// bulging arc, barely responding to curveBend) at larger gaps.
 export function curvesForLayout(
   rowGap: number,
   columnGap: number,
 ): { id: string; p0: [number, number]; p1: [number, number]; p2: [number, number]; p3: [number, number] }[] {
   const { topInner, botInner } = rowLayout(rowGap);
   const { col1, col2, col3, col4 } = columnLayout(columnGap);
+  const vHandle = (38 * rowGap) / DEFAULT_ROW_GAP;
+  const hHandle = 51 + (38 * columnGap) / DEFAULT_COLUMN_GAP;
   return [
     {
       id: 'p-solar-home',
       p0: [col2 + 12, topInner],
-      p1: [col2 + 12, topInner + 38],
-      p2: [col3 - 89, 173],
+      p1: [col2 + 12, topInner + vHandle],
+      p2: [col3 - hHandle, 173],
       p3: [col3 - 51, 173],
     },
     {
       id: 'p-solar-grid',
       p0: [col2 - 12, topInner],
-      p1: [col2 - 12, topInner + 38],
-      p2: [col1 + 89, 173],
+      p1: [col2 - 12, topInner + vHandle],
+      p2: [col1 + hHandle, 173],
       p3: [col1 + 51, 173],
     },
     {
       id: 'p-bat-home',
       p0: [col2 + 12, botInner],
-      p1: [col2 + 12, botInner - 38],
-      p2: [col3 - 89, 197],
+      p1: [col2 + 12, botInner - vHandle],
+      p2: [col3 - hHandle, 197],
       p3: [col3 - 51, 197],
     },
     {
       id: 'p-bat-grid',
       p0: [col2 - 12, botInner],
-      p1: [col2 - 12, botInner - 38],
-      p2: [col1 + 89, 197],
+      p1: [col2 - 12, botInner - vHandle],
+      p2: [col1 + hHandle, 197],
       p3: [col1 + 51, 197],
     },
     {
       id: 'p-home-consumer4',
       p0: [col3 + 51, 197],
-      p1: [col3 + 89, 197],
-      p2: [col4 - 12, botInner - 38],
+      p1: [col3 + hHandle, 197],
+      p2: [col4 - 12, botInner - vHandle],
       p3: [col4 - 12, botInner],
     },
     {
       id: 'p-home-consumer3',
       p0: [col3 + 51, 173],
-      p1: [col3 + 89, 173],
-      p2: [col4 - 12, topInner + 38],
+      p1: [col3 + hHandle, 173],
+      p2: [col4 - 12, topInner + vHandle],
       p3: [col4 - 12, topInner],
     },
   ];
@@ -236,17 +384,25 @@ export const CSS = `
 .dot.battery-load1 { fill: var(--sfd-battery-load1); stroke: var(--sfd-battery-load1); }
 .dot.battery-load2 { fill: var(--sfd-battery-load2); stroke: var(--sfd-battery-load2); }
 
-/* Triangle dot variant (dotShape: 'triangle') — a filled arrowhead instead of
-   a stroked circle; the surrounding <g> carries position+rotation as a JS-set
-   transform attribute every frame, so the pop-in/out shrink transition below
-   lives on the polygon itself (a CSS transform on the <g> would win over
-   its attribute and silently break the positioning). */
-.dot.dot-tri { stroke: none; stroke-width: 0; }
-.dot-tri {
+/* Oriented dot variants (dotShape: 'triangle' | 'bolt' | 'chevron' |
+   'spark') — a shaped marker instead of a plain stroked circle; the
+   surrounding <g> carries position+rotation as a JS-set transform attribute
+   every frame, so the pop-in/out shrink transition below lives on the shape
+   itself (a CSS transform on the <g> would win over its attribute and
+   silently break the positioning). All four share the same shrink
+   transition, differing only in whether the shape itself is filled
+   (triangle/bolt/spark) or stroked (chevron — a thin "›" reads better
+   stroked than as a sliver of fill). "miter" (not the usual "round") on
+   chevron's join keeps its point crisp instead of blunting it into a soft
+   bump that reads as a scribble at this size — "round" stays on its
+   open-path caps, so those ends still taper off gently. */
+.dot.dot-tri, .dot.dot-bolt, .dot.dot-spark { stroke: none; stroke-width: 0; }
+.dot.dot-chevron { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: miter; }
+.dot-tri, .dot-bolt, .dot-chevron, .dot-spark {
   transform: scale(1);
   transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.dot-tri.shrunk {
+.dot-tri.shrunk, .dot-bolt.shrunk, .dot-chevron.shrunk, .dot-spark.shrunk {
   transform: scale(0);
   transition: transform 0.18s ease-in;
 }
@@ -270,7 +426,83 @@ export const CSS = `
 .home-arc.bat-arc { stroke: var(--sfd-battery-out); }
 .home-arc.grid-arc { stroke: var(--sfd-grid-in); }
 
+/* Battery charge/discharge highlight — a bright white "comet" (a three-blur-
+   radius head — bloom/glow/core — with a smoothly tapering tail, see
+   batteryCometMarkup() above) that spins around the same ring as
+   bat-soc-arc, masked to its drawn extent (see the battery node markup and
+   applyBatteryHighlight() in core.ts). Modeled on the classic conic-gradient
+   spinner pattern (a rotating sliver that fades smoothly into transparent,
+   duplicated with blur for glow) — SVG has no conic-gradient, and a stroke
+   gradient can't easily stay attached to a shape animated via
+   stroke-dashoffset (the gradient's own coordinates don't travel with it),
+   so the fade is approximated instead by many thin trailing bands (see
+   BATTERY_COMET_LAYERS above).
+   The spin itself is driven from core.ts's own rAF loop (tick()), setting
+   each layer's stroke-dashoffset directly every frame from a continuously
+   advancing phase — deliberately *not* a plain CSS animation (as this used
+   to be): a CSS animation's speed can only change via its animation-
+   duration, and rebinding that custom property on a *running* animation
+   makes the browser reinterpret the already-elapsed time against the new
+   duration, snapping the comet to a different position the instant the
+   charge/discharge rate changes (exactly the SMIL-restart problem the flow
+   dots avoid the same way — see the "dots" field comment in core.ts). A
+   continuously-accumulated phase has no such snap: a speed change just
+   changes how fast it climbs from here, same as the dots.
+   Deliberately near-white rather than the battery's own accent color — an
+   overlay in the *same* hue as the ring it travels over reads as a dim
+   smudge more than a highlight; a near-white pops against any accent color
+   and against both themes, the same way a light-sweep glint would. Charging
+   and discharging use two different near-white tints (cool vs. warm — see
+   --bat-comet-color below) rather than literally the same white, so the
+   highlight itself also reads as "energy in" vs. "energy out" at a glance,
+   not just the ring color underneath it. */
+.bat-charge-highlight-group {
+  --bat-comet-color: #eef6ff; /* charging: cool white-blue, like an electric spark */
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.bat-charge-highlight-group.active { opacity: 1; }
+.bat-charge-highlight-group.discharging {
+  --bat-comet-color: #ffe0ad; /* discharging: warm amber-white, like heat leaving */
+}
+.bat-charge-bloom, .bat-charge-glow, .bat-charge-core, .bat-charge-tail {
+  fill: none;
+  stroke: var(--bat-comet-color);
+  stroke-linecap: round;
+}
+/* Three stacked blur radii at the head (wide/faint → narrow/sharp) read as
+   a much richer bloom than a single blurred layer would — closer to how a
+   real glow actually falls off with distance. */
+.bat-charge-bloom {
+  stroke-width: 20;
+  opacity: 0.16;
+  filter: blur(8px);
+}
+.bat-charge-glow {
+  stroke-width: 11;
+  opacity: 0.55;
+  filter: blur(3px);
+}
+.bat-charge-core {
+  stroke-width: 4;
+  opacity: 1;
+}
+
 .val-text { font-size: 14px; text-anchor: middle; fill: currentColor; font-weight: 700; }
+/* t-grid-val/t-bat-watts are colored with their own live accent (import/
+   export, charge/discharge — see core.ts) rather than the neutral
+   currentColor every other value text uses, so they can blend into a
+   same-hue background (their own node's tint in 'soft'/'tonal', or a
+   similarly-colored track/dot passing behind them in 'outline'). A soft
+   dark shadow (the same technique as .text-on-full, just lighter — this
+   text sits on a much less busy background than full-size icon mode does)
+   keeps them legible without depending on nodeStyle or theme. Applied
+   unconditionally in the markup below rather than toggled in JS, since it's
+   a permanent property of *which* text this is, not a mode-dependent state
+   — it stays alongside .node-filled-ink's own drop-shadow in 'filled' mode
+   without conflicting (different CSS mechanism, and imperceptible next to
+   that stronger shadow). */
+.val-text-accent { text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.3); }
 .lbl-text {
   font-size: 11px;
   text-anchor: middle;
@@ -358,6 +590,18 @@ export const SKELETON = `
          indicator below. -->
     <path id="p-bat-batteryload1" d="M${C.col2 - 52},${L.botY} H${C.col1 + 52}" />
     <path id="p-bat-batteryload2" d="M${C.col2 + 52},${L.botY} H${C.col3 - 52}" />
+    <!-- Masks the battery charge/discharge highlight (see the battery node
+         below) to bat-soc-arc's own drawn extent — its dasharray is kept in
+         sync with bat-soc-arc's every update (see applyBatteryHighlight() in
+         core.ts), so the highlight only ever shows over the charged portion
+         of the ring. stroke-width is wider than the highlight's own widest
+         layer (the blurred glow) so that blur isn't clipped radially, and
+         the mask itself is blurred so the angular (start/end) cutoff is a
+         soft fade rather than a hard edge slicing through the comet's own
+         blur whenever it passes near either end of the charged arc. -->
+    <mask id="bat-soc-mask" maskUnits="userSpaceOnUse">
+      <circle id="bat-soc-mask-arc" cx="${C.col2}" cy="${L.botY}" r="47" fill="none" stroke="#fff" stroke-width="34" style="filter: blur(7px)" transform="rotate(-90 ${C.col2} ${L.botY})" />
+    </mask>
   </defs>
 
   <!-- Every track has an id (derived as "use-" + its path id minus the "p-"
@@ -394,7 +638,7 @@ export const SKELETON = `
     <circle cx="${C.col1}" cy="${MID_ROW_Y}" r="52" class="node-bg" id="grid-bg" />
     <circle cx="${C.col1}" cy="${MID_ROW_Y}" r="52" class="node-ring" id="grid-ring" />
     <path id="grid-icon" class="node-icon" transform="${iconTransform(C.col1, MID_ROW_Y - 18, 28)}" d="${mdiTransmissionTower}" />
-    <text x="${C.col1}" y="${MID_ROW_Y + 16}" class="val-text" id="t-grid-val"></text>
+    <text x="${C.col1}" y="${MID_ROW_Y + 16}" class="val-text val-text-accent" id="t-grid-val"></text>
     <text x="${C.col1}" y="${MID_ROW_Y + 29}" class="lbl-text" id="t-grid-lbl"></text>
   </g>
 
@@ -447,10 +691,22 @@ export const SKELETON = `
   <g id="n-battery" class="node" data-topo="battery">
     <circle cx="${C.col2}" cy="${L.botY}" r="52" class="node-bg" id="bat-bg" />
     <circle id="bat-soc-arc" cx="${C.col2}" cy="${L.botY}" r="47" class="home-arc" transform="rotate(-90 ${C.col2} ${L.botY})" />
+    <!-- Charge/discharge highlight — a glowing comet built by
+         batteryCometMarkup() above (a three-blur-radius bloom/glow/core head
+         plus a smoothly tapering multi-band tail) that travels around the
+         same ring as bat-soc-arc, masked to bat-soc-arc's own drawn extent
+         (bat-soc-mask mirrors its dasharray every update — see
+         applyBatteryHighlight() in core.ts) so the comet is only ever
+         visible over the charged portion of the ring, not the undrawn
+         remainder. Same start angle (12 o'clock) and winding direction as
+         bat-soc-arc, so "clockwise" means the same thing for both. -->
+    <g id="bat-charge-highlight-group" class="bat-charge-highlight-group" mask="url(#bat-soc-mask)">
+      ${batteryCometMarkup(C.col2, L.botY)}
+    </g>
     <circle cx="${C.col2}" cy="${L.botY}" r="52" class="node-ring" id="bat-ring" />
     <path id="bat-icon" class="node-icon" transform="${iconTransform(C.col2, L.botY - 27, 28)}" d="${mdiBatteryMedium}" />
     <text x="${C.col2}" y="${L.botY + 5}" class="val-text" id="t-bat-soc"></text>
-    <text x="${C.col2}" y="${L.botY + 18}" class="val-text" id="t-bat-watts" style="font-size: 11px; opacity: 0.75"></text>
+    <text x="${C.col2}" y="${L.botY + 18}" class="val-text val-text-accent" id="t-bat-watts" style="font-size: 11px; opacity: 0.75"></text>
     <text x="${C.col2}" y="${L.botY + 31}" class="lbl-text" id="t-bat-lbl"></text>
   </g>
 
@@ -511,16 +767,19 @@ export const SKELETON = `
        end of its travel is centered right on that edge. Painted earlier (as
        these used to be, before the node bodies), the opaque node background
        would cover the half of the marker that overlaps the node's circle —
-       worst for the triangle shape, whose pointed tip leads into the node
-       and so is the first (and most visible) part clipped away. -->
+       worst for the oriented shapes (triangle/bolt/chevron/spark),
+       whose leading edge points into the node and so is the first (and most
+       visible) part clipped away. -->
   ${DOTS.map((d) =>
     Array.from(
       { length: MAX_DOTS_PER_TRACK },
       (_, i) =>
         `<circle id="dot-${d.id}-${i}" r="2" class="dot ${d.cls}" vector-effect="non-scaling-stroke" />
-  <g id="dot-tri-${d.id}-${i}" class="dot-tri-wrap">
-    <polygon points="-4,-3.5 -4,3.5 6,0" class="dot dot-tri ${d.cls}" vector-effect="non-scaling-stroke" />
+  ${ORIENTED_DOT_SHAPES.map(
+    (s) => `<g id="dot-${s.idPrefix}-${d.id}-${i}" class="${s.wrapClass}">
+    ${s.inner(d.cls)}
   </g>`,
+  ).join('\n  ')}`,
     ).join('\n  '),
   ).join('\n  ')}
 </svg>

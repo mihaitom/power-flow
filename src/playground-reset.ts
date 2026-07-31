@@ -22,9 +22,10 @@ import {
   updateLoadMin,
   updateGrid,
   setNodeStyle,
+  setDotShape,
   speedInp,
   iconStyleInp,
-  dotShapeInp,
+  batteryChargeHighlightInp,
   curveBendInp,
   dotCountInp,
   rowGapInp,
@@ -71,7 +72,8 @@ function resetCheckbox(input: HTMLInputElement) {
   resetInput(speedInp);
   setNodeStyle('soft');
   resetCheckbox(iconStyleInp);
-  resetCheckbox(dotShapeInp);
+  setDotShape('circle');
+  resetCheckbox(batteryChargeHighlightInp);
   resetInput(curveBendInp);
   resetInput(dotCountInp);
   resetInput(rowGapInp);

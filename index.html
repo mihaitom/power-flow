@@ -34,10 +34,9 @@
         <div id="action-buttons">
           <button id="get-code">Get code</button>
           <button id="simulate">▶ Simulate day</button>
+          <button id="reset-all">Reset</button>
           <button id="shuffle-appliances">Shuffle appliances</button>
           <button id="shuffle-icons">Shuffle icons</button>
-          <button id="reset-all">Reset</button>
-          <button id="reset-colors">Reset colors</button>
           <button id="copy-link">Copy link</button>
         </div>
 
@@ -53,13 +52,23 @@
             <button data-node-style="filled">Filled</button>
           </div>
         </div>
+        <div class="ctrl">
+          <label>Dot shape</label>
+          <div class="chip-tabs" id="dot-shape-tabs">
+            <button data-dot-shape="circle" class="on">Circle</button>
+            <button data-dot-shape="triangle">Triangle</button>
+            <button data-dot-shape="chevron">Chevron</button>
+            <button data-dot-shape="bolt">Bolt</button>
+            <button data-dot-shape="spark">Spark</button>
+          </div>
+        </div>
         <label class="toggle">
           <input id="icon-style-full" type="checkbox" /> Full-size icons
           (behind labels)
         </label>
-        <label class="toggle">
-          <input id="dot-shape-triangle" type="checkbox" /> Triangle dots
-          (point in flow direction)
+        <label class="toggle" id="battery-charge-highlight-ctrl">
+          <input id="battery-charge-highlight" type="checkbox" checked />
+          Battery charge/discharge highlight
         </label>
         <div class="ctrl">
           <label>Curve bend <span class="v" id="v-curve-bend"></span></label>
@@ -67,7 +76,7 @@
             id="curve-bend"
             type="range"
             min="0"
-            max="2.0"
+            max="2.5"
             step="0.1"
             value="1"
           />
@@ -99,8 +108,8 @@
           <input
             id="row-gap"
             type="range"
-            min="104"
-            max="250"
+            min="110"
+            max="180"
             step="1"
             value="125"
           />
@@ -110,8 +119,8 @@
           <input
             id="column-gap"
             type="range"
-            min="104"
-            max="250"
+            min="110"
+            max="180"
             step="1"
             value="145"
           />

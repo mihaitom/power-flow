@@ -10,7 +10,7 @@
  *   --test <label>        Test case button to click
  *   --node-style <style>  soft | tonal | outline | filled (default: soft)
  *   --icon-style           Turn on full-size background icons (iconStyle: 'full')
- *   --dot-shape             Turn on arrowhead dots (dotShape: 'triangle')
+ *   --dot-shape <shape>     circle | triangle | bolt | chevron | spark (default: circle, i.e. omit the flag)
  *   --duration <s>          Recording duration in seconds (default: 3)
  *   --fps <n>                Output GIF framerate (default: 30)
  *   --out <path>             Output file (default: docs/preview.gif)
@@ -52,20 +52,37 @@ const has = (flag) => args.includes(flag);
 // nodeStyle (all four appear once across the set) so it demonstrates both
 // the data-driven layout (the 4th column only appears when a test case
 // actually uses consumer3/consumer4) and the nodeStyle looks side by side —
-// not just the same look three times with different numbers. The filled
-// shot also turns on iconStyle: 'full' and dotShape: 'triangle', the two
-// appearance knobs the other three don't otherwise exercise.
+// not just the same look three times with different numbers. The hero shot
+// (preview.gif, top of the README) deliberately stays at every default
+// (including dotShape: 'circle') so it honestly represents the
+// out-of-the-box look; the other three each get one of the three newer
+// non-default dotShapes (bolt/chevron/spark — triangle, the original
+// alternate shape, is left to its own documented code example rather than
+// a fourth GIF), so the README's "four looks" showcase doubles as a
+// dotShape showcase too. The filled shot additionally turns on
+// iconStyle: 'full', the one appearance knob the other three don't
+// otherwise exercise.
 const SHOTS = [
   { test: 'Solar day', nodeStyle: 'soft', out: 'docs/preview.gif' },
-  { test: 'All four consumers + battery-fed loads', nodeStyle: 'outline', out: 'docs/preview-outline.gif' },
+  {
+    test: 'All four consumers + battery-fed loads',
+    nodeStyle: 'outline',
+    dotShape: 'chevron',
+    out: 'docs/preview-outline.gif',
+  },
   {
     test: 'Balcony PV + battery-fed load',
     nodeStyle: 'filled',
     iconStyle: true,
-    dotShape: true,
+    dotShape: 'bolt',
     out: 'docs/preview-filled.gif',
   },
-  { test: 'Consumers + battery, midday', nodeStyle: 'tonal', out: 'docs/preview-tonal.gif' },
+  {
+    test: 'Consumers + battery, midday',
+    nodeStyle: 'tonal',
+    dotShape: 'spark',
+    out: 'docs/preview-tonal.gif',
+  },
 ];
 
 const cliTest = get('--test', null);
@@ -75,7 +92,7 @@ const shots = cliTest
         test: cliTest,
         nodeStyle: get('--node-style', 'soft'),
         iconStyle: has('--icon-style'),
-        dotShape: has('--dot-shape'),
+        dotShape: get('--dot-shape', null),
         out: get('--out', 'docs/preview.gif'),
       },
     ]
@@ -184,15 +201,28 @@ async function captureShot(browser, { test, nodeStyle, iconStyle, dotShape, out 
     );
   }
 
-  // Optionally also switch on full-size background icons and/or
-  // arrowhead-shaped dots. Uses a synthetic DOM click (like the test-case
-  // and nodeStyle clicks above) rather than page.click() — puppeteer's real
+  // Optionally also switch on full-size background icons and/or a non-
+  // default dot shape. Uses a synthetic DOM click (like the test-case and
+  // nodeStyle clicks above) rather than page.click() — puppeteer's real
   // click requires the element to be visible/hit-testable, but these
-  // checkboxes live in the sidebar `.card`, which the style tag above hides.
+  // controls live in the sidebar `.card`, which the style tag above hides.
   if (iconStyle)
     await page.evaluate(() => document.getElementById('icon-style-full').click());
-  if (dotShape)
-    await page.evaluate(() => document.getElementById('dot-shape-triangle').click());
+  if (dotShape) {
+    const shaped = await page.evaluate((shape) => {
+      const btn = document.querySelector(`[data-dot-shape="${shape}"]`);
+      if (btn) {
+        btn.click();
+        return true;
+      }
+      return false;
+    }, dotShape);
+    if (!shaped) {
+      throw new Error(
+        `dotShape "${dotShape}" not found (expected circle/triangle/bolt/chevron/spark)`,
+      );
+    }
+  }
 
   // The diagram's own aspect ratio (400 or 545 wide, per the viewBox sizing
   // in core.ts's update()) depends on which optional nodes the test case
@@ -240,7 +270,7 @@ async function captureShot(browser, { test, nodeStyle, iconStyle, dotShape, out 
   });
 
   process.stdout.write(
-    `Recording "${test}" (${nodeStyle}, ${width}×${height}) for ${DURATION_S}s…`,
+    `Recording "${test}" (${nodeStyle}${dotShape ? `, ${dotShape} dots` : ''}, ${width}×${height}) for ${DURATION_S}s…`,
   );
   await new Promise((r) => setTimeout(r, DURATION_S * 1000));
   await client.send('Page.stopScreencast');

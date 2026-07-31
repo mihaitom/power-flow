@@ -5,6 +5,7 @@ import type {
   FlowTopology,
   PowerFlowOptions,
   NodeStyle,
+  DotShape,
 } from './types';
 import { DEFAULT_COLORS, DEFAULT_LABELS, DEFAULT_ICONS, DEFAULT_TOPOLOGY } from './defaults';
 import { computeFlowAllocation } from './flow-allocation';
@@ -23,6 +24,9 @@ import {
   DEFAULT_COLUMN_GAP,
   trackIdFor,
   MAX_DOTS_PER_TRACK,
+  ARC_LENGTH,
+  BATTERY_COMET_LAYERS,
+  ORIENTED_DOT_SHAPES,
 } from './skeleton';
 
 export type {
@@ -36,20 +40,29 @@ export type {
 export type { FlowAllocation } from './flow-allocation';
 export { computeFlowAllocation } from './flow-allocation';
 
-// One marker element (rendered as either a circle or a triangle, see
-// dotShape) at a fixed index along a flow's evenly-spaced dot lineup.
+// One "oriented" (non-'circle') marker shape's pair of elements — the <g>
+// carries position+rotation (JS-set transform attribute every frame), while
+// `shrinkEl` (the shape inside it) carries the shrink pop-in/out CSS
+// transition (see skeleton.ts's CSS comment on why these can't be the same
+// element — a CSS transform on the <g> would win over its JS-set attribute
+// transform and silently break the positioning).
+interface OrientedMarker {
+  group: SVGGElement;
+  shrinkEl: Element;
+}
+
+// One marker element (rendered as a circle or one of the oriented shapes —
+// see dotShape) at a fixed index along a flow's evenly-spaced dot lineup.
 // `active` mirrors whether this index is within the current `dotCount` for a
 // currently-visible flow; `shrinking` covers the 200ms after it drops out of
 // that range (or the flow itself hides) while its pop-out CSS transition
 // still plays.
 interface DotMarker {
   circle: SVGCircleElement;
-  // Triangle-shape variant of the same marker (dotShape: 'triangle') — the
-  // <g> carries position+rotation (JS-set transform attribute), while the
-  // polygon inside carries the shrink pop-in/out CSS transition (see
-  // skeleton.ts's CSS comment on why these can't be the same element).
-  triangleGroup: SVGGElement;
-  trianglePolygon: SVGPolygonElement;
+  // Every non-'circle' shape's elements, pre-rendered and always present
+  // (like `circle` itself) so switching dotShape is just a display/position
+  // swap — see ORIENTED_DOT_SHAPES in skeleton.ts for the shape list.
+  oriented: Record<Exclude<DotShape, 'circle'>, OrientedMarker>;
   active: boolean;
   shrinking: boolean;
   hideTimer?: ReturnType<typeof setTimeout>;
@@ -71,9 +84,6 @@ interface DotFlowState {
   maxDots: number; // this leg's own cap on top of options.dotCount — see DOTS
   markers: DotMarker[];
 }
-
-// Home arc: circumference for r=47 (inner ring of the home circle, r=52).
-const ARC_LENGTH = 2 * Math.PI * 47; // ≈ 295.31
 
 function formatWatts(watts: number): string {
   return Math.abs(watts) >= 1000
@@ -142,11 +152,12 @@ export class PowerFlow {
   private speedScale = 1;
   private nodeStyle: NodeStyle = 'soft';
   private iconStyle: 'default' | 'full' = 'default';
-  private dotShape: 'circle' | 'triangle' = 'circle';
+  private dotShape: DotShape = 'circle';
   private dotCount = 1;
   private curveBend = 1;
   private rowGap = DEFAULT_ROW_GAP;
   private columnGap = DEFAULT_COLUMN_GAP;
+  private batteryChargeHighlight = true;
   // Tracks whether the consumer2/batteryLoad2 slot conflict was already active
   // last render, so the console warning fires once per transition into the
   // conflicting state rather than on every `update()` call.
@@ -163,12 +174,26 @@ export class PowerFlow {
   private raf = 0;
   private lastTime = 0;
 
+  // Battery charge/discharge comet — the exact same continuously-
+  // accumulated-phase technique as `dots` above (see that comment) and for
+  // the same reason: driven from tick() rather than a CSS animation, so a
+  // charge-rate change (which changes speed) never snaps the comet to a
+  // different position — see the .bat-charge-* CSS comment in skeleton.ts
+  // for the full "why". `delay` (a 0..1 fraction of a lap) is copied from
+  // BATTERY_COMET_LAYERS once in initBatteryComet(); everything else here
+  // changes every frame/update.
+  private batteryCometLayers: { el: SVGCircleElement; delay: number }[] = [];
+  private batteryCometPhase = 0;
+  private batteryCometSpeed = 0; // px/s along ARC_LENGTH; 0 while inactive
+  private batteryCometDirection = 1; // +1 charging, -1 discharging
+
   constructor(host: HTMLElement, options: PowerFlowOptions) {
     this.root = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
     this.root.innerHTML = `<style>${CSS}</style>${SKELETON}`;
     this.svg = this.root.querySelector('svg')!;
     this.cacheRefs();
     this.initDots();
+    this.initBatteryComet();
     this.cacheIconLayouts();
     this.update(options);
     this.lastTime = performance.now();
@@ -187,14 +212,16 @@ export class PowerFlow {
       const markers: DotMarker[] = [];
       for (let i = 0; i < MAX_DOTS_PER_TRACK; i++) {
         const circle = this.el[`dot-${d.id}-${i}`] as SVGCircleElement;
-        const triangleGroup = this.el[`dot-tri-${d.id}-${i}`] as SVGGElement;
-        const trianglePolygon = triangleGroup.querySelector('polygon')!;
         circle.style.display = 'none';
-        triangleGroup.style.display = 'none';
+        const oriented = {} as DotMarker['oriented'];
+        for (const { shape, idPrefix } of ORIENTED_DOT_SHAPES) {
+          const group = this.el[`dot-${idPrefix}-${d.id}-${i}`] as SVGGElement;
+          group.style.display = 'none';
+          oriented[shape] = { group, shrinkEl: group.firstElementChild! };
+        }
         markers.push({
           circle,
-          triangleGroup,
-          trianglePolygon,
+          oriented,
           active: false,
           shrinking: false,
           prevFrac: 0,
@@ -214,17 +241,28 @@ export class PowerFlow {
     }
   }
 
+  // One-time lookup of each battery comet layer's element (see the
+  // `batteryCometLayers` field comment) — dasharray is already baked into
+  // the markup as a static attribute (see skeleton.ts), so all that's
+  // cached here is the element ref itself plus its fixed `delay`.
+  private initBatteryComet() {
+    this.batteryCometLayers = BATTERY_COMET_LAYERS.map(({ id, delay }) => ({
+      el: this.el[id] as SVGCircleElement,
+      delay,
+    })).filter((l) => l.el);
+  }
+
   // The marker element currently shown for a dot (its `display` is toggled
   // in setDot()), depending on the active dotShape.
   private activeMarker(m: DotMarker): SVGGraphicsElement {
-    return this.dotShape === 'triangle' ? m.triangleGroup : m.circle;
+    return this.dotShape === 'circle' ? m.circle : m.oriented[this.dotShape].group;
   }
 
-  // The element that actually gets the `.shrunk` pop-in/out class — for
-  // triangles that's the inner polygon, not the position/rotation-carrying
-  // <g> (see the `dots` field comment above for why).
+  // The element that actually gets the `.shrunk` pop-in/out class — for the
+  // oriented shapes that's the inner shape, not the position/rotation-
+  // carrying <g> (see the `OrientedMarker` comment above for why).
   private shrinkTarget(m: DotMarker): Element {
-    return this.dotShape === 'triangle' ? m.trianglePolygon : m.circle;
+    return this.dotShape === 'circle' ? m.circle : m.oriented[this.dotShape].shrinkEl;
   }
 
   // Snapshots each node's *default*-mode icon transform and text y positions
@@ -379,12 +417,20 @@ export class PowerFlow {
       el?.setAttribute('cx', String(cols.col1));
       el?.setAttribute('transform', `rotate(-90 ${cols.col1} ${MID_ROW_Y})`);
     }
-    (this.el['bat-soc-arc'] as SVGCircleElement | undefined)?.setAttribute('cx', String(cols.col2));
-    (this.el['bat-soc-arc'] as SVGCircleElement | undefined)?.setAttribute('cy', String(rows.botY));
-    (this.el['bat-soc-arc'] as SVGCircleElement | undefined)?.setAttribute(
-      'transform',
-      `rotate(-90 ${cols.col2} ${rows.botY})`,
-    );
+    // bat-soc-arc itself, its mask (bat-soc-mask-arc) and every layer of the
+    // charge/discharge comet (BATTERY_COMET_LAYERS — see skeleton.ts) all sit
+    // concentric on the same ring, so they all move together here.
+    const batRotate = `rotate(-90 ${cols.col2} ${rows.botY})`;
+    for (const id of [
+      'bat-soc-arc',
+      'bat-soc-mask-arc',
+      ...BATTERY_COMET_LAYERS.map((l) => l.id),
+    ]) {
+      const el = this.el[id] as SVGCircleElement | undefined;
+      el?.setAttribute('cx', String(cols.col2));
+      el?.setAttribute('cy', String(rows.botY));
+      el?.setAttribute('transform', batRotate);
+    }
 
     this.setPathD('p-grid-home', `M${cols.col1 + 52},${MID_ROW_Y} H${cols.col3 - 52}`);
     this.setPathD('p-solar-bat', `M${cols.col2},${rows.topInner} V${rows.botInner}`);
@@ -473,11 +519,12 @@ export class PowerFlow {
   private static readonly MARKER_END_INSET_PX = 4;
 
   // Position along the path for marker `i`'s current progress, honouring
-  // `reverse`. For triangle dots, also orients the arrowhead along its
-  // direction of travel — found via a central-difference sample around the
-  // current position, so it's correct for both `reverse` and non-`reverse`
-  // dots (and for paths shared by both directions, like p-bat-grid) without
-  // needing to special-case `reverse` itself.
+  // `reverse`. For the oriented shapes (triangle/bolt/chevron/spark),
+  // also orients the marker along its direction of travel — found via a
+  // central-difference sample around the current position, so it's correct
+  // for both `reverse` and non-`reverse` dots (and for paths shared by both
+  // directions, like p-bat-grid) without needing to special-case `reverse`
+  // itself.
   private placeMarker(s: DotFlowState, i: number) {
     const m = s.markers[i];
     const frac = this.markerFraction(s, i);
@@ -488,7 +535,10 @@ export class PowerFlow {
     const inset = Math.min(PowerFlow.MARKER_END_INSET_PX, s.length / 2);
     const currentLen = inset + at * (s.length - 2 * inset);
     const p = s.path.getPointAtLength(currentLen);
-    if (this.dotShape === 'triangle') {
+    if (this.dotShape === 'circle') {
+      m.circle.setAttribute('cx', String(p.x));
+      m.circle.setAttribute('cy', String(p.y));
+    } else {
       const dir = s.reverse ? -1 : 1;
       const d = PowerFlow.TANGENT_SAMPLE_PX;
       const ahead = s.path.getPointAtLength(
@@ -498,10 +548,10 @@ export class PowerFlow {
         Math.max(0, Math.min(s.length, currentLen - dir * d)),
       );
       const angle = (Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * 180) / Math.PI;
-      m.triangleGroup.setAttribute('transform', `translate(${p.x} ${p.y}) rotate(${angle})`);
-    } else {
-      m.circle.setAttribute('cx', String(p.x));
-      m.circle.setAttribute('cy', String(p.y));
+      m.oriented[this.dotShape].group.setAttribute(
+        'transform',
+        `translate(${p.x} ${p.y}) rotate(${angle})`,
+      );
     }
   }
 
@@ -560,6 +610,22 @@ export class PowerFlow {
         this.placeMarker(s, i);
       });
     }
+    if (this.batteryCometSpeed > 0) {
+      this.batteryCometPhase += (this.batteryCometSpeed * dt) / ARC_LENGTH;
+      this.batteryCometPhase -= Math.floor(this.batteryCometPhase); // wrap into [0, 1)
+      for (const { el, delay } of this.batteryCometLayers) {
+        // A trailing layer shows where the head was `delay` (a fraction of
+        // one lap) ago — see the batteryCometLayers field comment for why
+        // this, unlike the old CSS animation-delay, never snaps when speed
+        // changes.
+        let layerPhase = this.batteryCometPhase - delay;
+        layerPhase -= Math.floor(layerPhase); // wrap into [0, 1)
+        el.setAttribute(
+          'stroke-dashoffset',
+          String(this.batteryCometDirection * -layerPhase * ARC_LENGTH),
+        );
+      }
+    }
     this.raf = requestAnimationFrame(this.tick);
   };
 
@@ -589,7 +655,7 @@ export class PowerFlow {
       this.iconStyle = settings.iconStyle;
     }
     if (settings?.curveBend !== undefined) {
-      this.curveBend = Math.max(0, Math.min(2.0, settings.curveBend));
+      this.curveBend = Math.max(0, Math.min(2.5, settings.curveBend));
     }
     if (settings?.dotShape !== undefined && settings.dotShape !== this.dotShape) {
       this.swapDotShape(settings.dotShape);
@@ -598,14 +664,16 @@ export class PowerFlow {
       this.dotCount = Math.max(1, Math.min(MAX_DOTS_PER_TRACK, Math.round(settings.dotCount)));
     }
     if (settings?.rowGap !== undefined) {
-      // Floor of 104 (2× node radius) keeps the top/bottom rows from
-      // overlapping the middle row; 250 is a generous ceiling against an
-      // absurdly stretched-out diagram.
-      this.rowGap = Math.max(104, Math.min(250, settings.rowGap));
+      // Floor of 110 keeps the top/bottom rows comfortably clear of the
+      // middle row; 180 is a ceiling against an overly stretched-out diagram.
+      this.rowGap = Math.max(110, Math.min(180, settings.rowGap));
     }
     if (settings?.columnGap !== undefined) {
-      // Same bounds as rowGap, for the same reason (2× node radius floor).
-      this.columnGap = Math.max(104, Math.min(250, settings.columnGap));
+      // Same bounds as rowGap, for the same reason.
+      this.columnGap = Math.max(110, Math.min(180, settings.columnGap));
+    }
+    if (settings?.batteryChargeHighlight !== undefined) {
+      this.batteryChargeHighlight = settings.batteryChargeHighlight;
     }
     this.applyLayout();
     this.applyIconStyle();
@@ -871,6 +939,7 @@ export class PowerFlow {
           ? Math.max(0, Math.min(100, data.batterySoc)) / 100
           : 0;
       socArc.style.strokeDasharray = `${pct * ARC_LENGTH} ${ARC_LENGTH}`;
+      this.applyBatteryHighlight(batteryWatts, pct);
     }
 
     // ── Consumer 1 node (home consumer, top-left of its 2×2) ──
@@ -1110,7 +1179,7 @@ export class PowerFlow {
   // shrinking dot, so toggling dotShape mid-animation doesn't leave a dot
   // stuck invisible (old shape hidden, new shape never shown) or duplicated
   // (both shapes visible at once).
-  private swapDotShape(newShape: 'circle' | 'triangle') {
+  private swapDotShape(newShape: DotShape) {
     for (const id in this.dots) {
       for (const m of this.dots[id].markers) {
         if (!m.active && !m.shrinking) continue;
@@ -1142,6 +1211,41 @@ export class PowerFlow {
     const raw = (20 + Math.sqrt(Math.abs(watts)) * 4) * this.speedScale;
     const seconds = Math.max(0.04, Math.min(length / raw, 14));
     return length / seconds;
+  }
+
+  // Drives the battery charge/discharge comet (see batteryCometMarkup() in
+  // skeleton.ts) — a near-white highlight that spins around the same ring
+  // as the SoC arc, masked to that arc's own drawn extent (`pct`) so it
+  // only shows over the charged portion — see the battery node markup for
+  // the mask itself and skeleton.ts's CSS comment for why it's near-white
+  // rather than the battery's own accent color. This function only ever
+  // sets `batteryCometSpeed`/`batteryCometDirection` (consumed by tick(),
+  // which owns the actual per-frame motion — see that field's comment for
+  // why) and the .active/.discharging classes.
+  // Speed reuses flowSpeed() (the same px/s curve the flow dots use) so a
+  // given wattage feels equally fast here as it does traveling a track
+  // elsewhere in the diagram.
+  // Direction encodes charge vs discharge: charging spins clockwise (the
+  // same winding direction the SoC arc fills in), discharging reverses it.
+  // `this.batteryChargeHighlight` (settings.batteryChargeHighlight, default
+  // true) is the escape hatch for a plain, motionless SoC ring — gating it
+  // here (rather than skipping the call site) still keeps the mask's
+  // dasharray in sync, so re-enabling it later doesn't show a stale extent.
+  private applyBatteryHighlight(batteryWatts: number, pct: number) {
+    const group = this.el['bat-charge-highlight-group'] as SVGGElement | undefined;
+    const mask = this.el['bat-soc-mask-arc'] as SVGCircleElement | undefined;
+    if (!group || !mask) return;
+    mask.setAttribute('stroke-dasharray', `${pct * ARC_LENGTH} ${ARC_LENGTH}`);
+    const rate = Math.abs(batteryWatts);
+    const active = this.batteryChargeHighlight && rate > 0;
+    group.classList.toggle('active', active);
+    if (!active) {
+      this.batteryCometSpeed = 0;
+      return;
+    }
+    group.classList.toggle('discharging', batteryWatts < 0);
+    this.batteryCometSpeed = this.flowSpeed(rate, ARC_LENGTH);
+    this.batteryCometDirection = batteryWatts < 0 ? -1 : 1;
   }
 
   // Render a share (0..1) as a dash arc on the home ring, offset by the share

@@ -51,6 +51,11 @@ export function apply() {
     hasSolar.checked ? '1' : '0.4';
   (document.getElementById('battery-ctrls') as HTMLElement).style.opacity =
     hasBat.checked ? '1' : '0.4';
+  // Meaningless without a battery (applyBatteryHighlight() in core.ts is
+  // already a no-op then) — dim it the same way battery-ctrls dims, so it
+  // reads as "currently irrelevant" rather than a live, independent toggle.
+  (document.getElementById('battery-charge-highlight-ctrl') as HTMLElement).style.opacity =
+    hasBat.checked ? '1' : '0.4';
   (document.getElementById('consumer1-ctrls') as HTMLElement).style.opacity =
     hasC1.checked ? '1' : '0.4';
   (document.getElementById('consumer2-ctrls') as HTMLElement).style.opacity =
@@ -121,9 +126,30 @@ const iconStyleInp = document.getElementById('icon-style-full') as HTMLInputElem
 iconStyleInp.addEventListener('input', () => {
   el.options = { ...el.options, iconStyle: iconStyleInp.checked ? 'full' : 'default' };
 });
-const dotShapeInp = document.getElementById('dot-shape-triangle') as HTMLInputElement;
-dotShapeInp.addEventListener('input', () => {
-  el.options = { ...el.options, dotShape: dotShapeInp.checked ? 'triangle' : 'circle' };
+const DOT_SHAPES = ['circle', 'triangle', 'bolt', 'chevron', 'spark'] as const;
+export let currentDotShape: (typeof DOT_SHAPES)[number] = 'circle';
+const dotShapeTabsEl = document.getElementById('dot-shape-tabs') as HTMLElement;
+export function setDotShape(shape: (typeof DOT_SHAPES)[number]) {
+  currentDotShape = shape;
+  dotShapeTabsEl.querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('on', (b as HTMLElement).dataset.dotShape === shape);
+  });
+  el.options = { ...el.options, dotShape: shape };
+}
+dotShapeTabsEl.querySelectorAll('button').forEach((b) => {
+  b.addEventListener('click', () => {
+    setDotShape((b as HTMLElement).dataset.dotShape as (typeof DOT_SHAPES)[number]);
+    notifyStateChange();
+  });
+});
+const batteryChargeHighlightInp = document.getElementById(
+  'battery-charge-highlight',
+) as HTMLInputElement;
+batteryChargeHighlightInp.addEventListener('input', () => {
+  el.options = {
+    ...el.options,
+    batteryChargeHighlight: batteryChargeHighlightInp.checked,
+  };
 });
 const curveBendInp = document.getElementById('curve-bend') as HTMLInputElement;
 const vCurveBend = document.getElementById('v-curve-bend') as HTMLElement;
@@ -155,7 +181,7 @@ columnGapInp.addEventListener('input', () => {
 });
 export {
   iconStyleInp,
-  dotShapeInp,
+  batteryChargeHighlightInp,
   curveBendInp,
   vCurveBend,
   dotCountInp,

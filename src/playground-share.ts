@@ -29,7 +29,7 @@ import {
   speedInp,
   vSpeed,
   iconStyleInp,
-  dotShapeInp,
+  batteryChargeHighlightInp,
   curveBendInp,
   vCurveBend,
   dotCountInp,
@@ -40,6 +40,8 @@ import {
   vColumnGap,
   currentNodeStyle,
   setNodeStyle,
+  currentDotShape,
+  setDotShape,
 } from './playground-state';
 
 // Consumer-slot keys whose icon/label are only meaningful while the slot's
@@ -217,7 +219,10 @@ function buildSnippet(fw: string): string {
     if (currentNodeStyle !== 'soft')
       optFields.push(`${optInner}nodeStyle: "${currentNodeStyle}"`);
     if (iconStyleInp.checked) optFields.push(`${optInner}iconStyle: "full"`);
-    if (dotShapeInp.checked) optFields.push(`${optInner}dotShape: "triangle"`);
+    if (currentDotShape !== 'circle')
+      optFields.push(`${optInner}dotShape: "${currentDotShape}"`);
+    if (!batteryChargeHighlightInp.checked)
+      optFields.push(`${optInner}batteryChargeHighlight: false`);
     if (+curveBendInp.value !== 1)
       optFields.push(`${optInner}curveBend: ${+curveBendInp.value}`);
     if (+dotCountInp.value !== 1)
@@ -418,7 +423,8 @@ interface ShareState {
   // common case (nobody touched the appearance controls) short.
   nodeStyle?: string;
   iconStyle?: true;
-  dotShape?: true;
+  dotShape?: string;
+  batteryChargeHighlight?: false;
   curveBend?: number;
   dotCount?: number;
   rowGap?: number;
@@ -466,7 +472,8 @@ function encodeState(): ShareState {
   };
   if (currentNodeStyle !== 'soft') state.nodeStyle = currentNodeStyle;
   if (iconStyleInp.checked) state.iconStyle = true;
-  if (dotShapeInp.checked) state.dotShape = true;
+  if (currentDotShape !== 'circle') state.dotShape = currentDotShape;
+  if (!batteryChargeHighlightInp.checked) state.batteryChargeHighlight = false;
   if (+curveBendInp.value !== 1) state.curveBend = +curveBendInp.value;
   if (+dotCountInp.value !== 1) state.dotCount = +dotCountInp.value;
   if (+rowGapInp.value !== 125) state.rowGap = +rowGapInp.value;
@@ -511,7 +518,7 @@ document.addEventListener('pf:statechange', syncUrl);
   hasBl2,
   speedInp,
   iconStyleInp,
-  dotShapeInp,
+  batteryChargeHighlightInp,
   curveBendInp,
   dotCountInp,
   rowGapInp,
@@ -566,8 +573,20 @@ copyLinkBtn.addEventListener('click', () => {
     setNodeStyle(s.nodeStyle);
   iconStyleInp.checked = s.iconStyle ?? false;
   el.options = { ...el.options, iconStyle: iconStyleInp.checked ? 'full' : 'default' };
-  dotShapeInp.checked = s.dotShape ?? false;
-  el.options = { ...el.options, dotShape: dotShapeInp.checked ? 'triangle' : 'circle' };
+  if (
+    s.dotShape === 'circle' ||
+    s.dotShape === 'triangle' ||
+    s.dotShape === 'bolt' ||
+    s.dotShape === 'chevron' ||
+    s.dotShape === 'spark'
+  )
+    setDotShape(s.dotShape);
+  else setDotShape('circle');
+  batteryChargeHighlightInp.checked = s.batteryChargeHighlight ?? true;
+  el.options = {
+    ...el.options,
+    batteryChargeHighlight: batteryChargeHighlightInp.checked,
+  };
   curveBendInp.value = String(s.curveBend ?? 1);
   vCurveBend.textContent = `${curveBendInp.value}×`;
   el.options = { ...el.options, curveBend: +curveBendInp.value };
