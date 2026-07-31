@@ -79,7 +79,7 @@ crisp scalable vectors; no runtime framework dependency.
   (circle, triangle, bolt, chevron, spark), multiple evenly-spaced dots per
   flow, and adjustable curve bend are all opt-in via
   `options.iconStyle`/`options.dotShape`/`options.dotCount`/`options.curveBend`.
-- **Tiny & isolated** — ~11 kB min+gzip, zero runtime deps, shadow DOM so its
+- **Tiny & isolated** — ~16 kB min+gzip, zero runtime deps, shadow DOM so its
   styles never leak into your app.
 
 ## Install
