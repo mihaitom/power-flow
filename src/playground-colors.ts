@@ -33,11 +33,15 @@ export function applyColors() {
 Object.values(cinp).forEach((i) => i.addEventListener('input', applyColors));
 applyColors();
 
+export function resetColors() {
+  for (const [k, i] of Object.entries(cinp)) i.value = DEFAULT_COLORS[k];
+  applyColors();
+}
+
 (document.getElementById('reset-colors') as HTMLElement).addEventListener(
   'click',
   () => {
-    for (const [k, i] of Object.entries(cinp)) i.value = DEFAULT_COLORS[k];
-    applyColors();
+    resetColors();
     notifyStateChange();
   },
 );

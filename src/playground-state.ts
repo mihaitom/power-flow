@@ -132,7 +132,39 @@ curveBendInp.addEventListener('input', () => {
   vCurveBend.textContent = `${curveBendInp.value}×`;
   el.options = { ...el.options, curveBend: Number(curveBendInp.value) };
 });
-export { iconStyleInp, dotShapeInp, curveBendInp, vCurveBend };
+const dotCountInp = document.getElementById('dot-count') as HTMLInputElement;
+const vDotCount = document.getElementById('v-dot-count') as HTMLElement;
+vDotCount.textContent = dotCountInp.value;
+dotCountInp.addEventListener('input', () => {
+  vDotCount.textContent = dotCountInp.value;
+  el.options = { ...el.options, dotCount: Number(dotCountInp.value) };
+});
+const rowGapInp = document.getElementById('row-gap') as HTMLInputElement;
+const vRowGap = document.getElementById('v-row-gap') as HTMLElement;
+vRowGap.textContent = `${rowGapInp.value}px`;
+rowGapInp.addEventListener('input', () => {
+  vRowGap.textContent = `${rowGapInp.value}px`;
+  el.options = { ...el.options, rowGap: Number(rowGapInp.value) };
+});
+const columnGapInp = document.getElementById('column-gap') as HTMLInputElement;
+const vColumnGap = document.getElementById('v-column-gap') as HTMLElement;
+vColumnGap.textContent = `${columnGapInp.value}px`;
+columnGapInp.addEventListener('input', () => {
+  vColumnGap.textContent = `${columnGapInp.value}px`;
+  el.options = { ...el.options, columnGap: Number(columnGapInp.value) };
+});
+export {
+  iconStyleInp,
+  dotShapeInp,
+  curveBendInp,
+  vCurveBend,
+  dotCountInp,
+  vDotCount,
+  rowGapInp,
+  vRowGap,
+  columnGapInp,
+  vColumnGap,
+};
 
 // ── Slider logic ──────────────────────────────────────────────────────────────
 const consumer1Inp = document.getElementById('consumer1') as HTMLInputElement;

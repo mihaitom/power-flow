@@ -36,23 +36,9 @@
           <button id="simulate">▶ Simulate day</button>
           <button id="shuffle-appliances">Shuffle appliances</button>
           <button id="shuffle-icons">Shuffle icons</button>
-          <button id="reset-icons">Reset icons</button>
+          <button id="reset-all">Reset</button>
           <button id="reset-colors">Reset colors</button>
           <button id="copy-link">Copy link</button>
-        </div>
-
-        <hr />
-        <div class="section-title">Dot speed</div>
-        <div class="ctrl">
-          <label>Speed <span class="v" id="v-speed"></span></label>
-          <input
-            id="speed"
-            type="range"
-            min="0.1"
-            max="3"
-            step="0.1"
-            value="1"
-          />
         </div>
 
         <hr />
@@ -84,6 +70,50 @@
             max="2.0"
             step="0.1"
             value="1"
+          />
+        </div>
+        <div class="ctrl">
+          <label>Dot speed <span class="v" id="v-speed"></span></label>
+          <input
+            id="speed"
+            type="range"
+            min="0.1"
+            max="3"
+            step="0.1"
+            value="1"
+          />
+        </div>
+        <div class="ctrl">
+          <label>Dots per flow <span class="v" id="v-dot-count"></span></label>
+          <input
+            id="dot-count"
+            type="range"
+            min="1"
+            max="8"
+            step="1"
+            value="1"
+          />
+        </div>
+        <div class="ctrl">
+          <label>Row gap <span class="v" id="v-row-gap"></span></label>
+          <input
+            id="row-gap"
+            type="range"
+            min="104"
+            max="250"
+            step="1"
+            value="125"
+          />
+        </div>
+        <div class="ctrl">
+          <label>Column gap <span class="v" id="v-column-gap"></span></label>
+          <input
+            id="column-gap"
+            type="range"
+            min="104"
+            max="250"
+            step="1"
+            value="145"
           />
         </div>
 

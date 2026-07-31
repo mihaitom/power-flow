@@ -128,6 +128,13 @@ export interface PowerFlowSettings {
   /** `'triangle'` draws flow dots as small arrowheads that point in their
    *  direction of travel, instead of plain circles. Default `'circle'`. */
   dotShape: 'circle' | 'triangle';
+  /** Number of dots animated per active flow line, evenly spaced along the
+   *  path. `1` (the default) is the classic single traveling dot. Clamped
+   *  internally to `1–8`. The four short direct connections between
+   *  grid-adjacent nodes (home↔consumer1/2, battery↔batteryLoad1/2) always
+   *  cap at 2 regardless of this value — their path is too short for more
+   *  dots to read as distinct. */
+  dotCount: number;
   /** Scales the diagram's curved connections by stretching/shrinking how far
    *  each one travels in its fixed departure/arrival direction before
    *  turning. `0` collapses them into direct lines, `1` (the default) is
@@ -135,6 +142,20 @@ export interface PowerFlowSettings {
    *  with a sharper turn in between. Clamped to `0–2` internally to keep curves
    *  from crossing neighboring nodes. */
   curveBend: number;
+  /** Vertical center-to-center distance (in px) between the middle row
+   *  (grid/home) and the top/bottom rows (solar/consumer1/consumer3 and
+   *  battery/consumer2/consumer4/batteryLoad1/batteryLoad2). Default `125` —
+   *  the diagram's original spacing, slightly tighter than the fixed 145px
+   *  horizontal column gap. Set to `145` to match the column gap exactly, or
+   *  any other value. Clamped internally to `104–250` (below 104 the top/
+   *  bottom rows would overlap the middle row). */
+  rowGap: number;
+  /** Horizontal center-to-center distance (in px) between adjacent columns —
+   *  grid/batteryLoad1, solar/battery, home (fixed anchor — never moves),
+   *  and consumer3/consumer4, each `columnGap` px from the next. Default
+   *  `145` — the diagram's original, always-shipped spacing. Clamped
+   *  internally to `104–250` (below 104 adjacent columns would overlap). */
+  columnGap: number;
 }
 
 export interface PowerFlowOptions {

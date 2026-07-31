@@ -8,7 +8,22 @@ import type {
 } from './types';
 import { DEFAULT_COLORS, DEFAULT_LABELS, DEFAULT_ICONS, DEFAULT_TOPOLOGY } from './defaults';
 import { computeFlowAllocation } from './flow-allocation';
-import { CSS, SKELETON, DOTS, DOT_CLS_TO_COLOR_VAR, CURVES, trackIdFor } from './skeleton';
+import type { RowLayout, ColumnLayout } from './skeleton';
+import {
+  CSS,
+  SKELETON,
+  DOTS,
+  DOT_CLS_TO_COLOR_VAR,
+  curvesForLayout,
+  rowLayout,
+  columnLayout,
+  iconTransform,
+  MID_ROW_Y,
+  DEFAULT_ROW_GAP,
+  DEFAULT_COLUMN_GAP,
+  trackIdFor,
+  MAX_DOTS_PER_TRACK,
+} from './skeleton';
 
 export type {
   FlowData,
@@ -20,6 +35,42 @@ export type {
 } from './types';
 export type { FlowAllocation } from './flow-allocation';
 export { computeFlowAllocation } from './flow-allocation';
+
+// One marker element (rendered as either a circle or a triangle, see
+// dotShape) at a fixed index along a flow's evenly-spaced dot lineup.
+// `active` mirrors whether this index is within the current `dotCount` for a
+// currently-visible flow; `shrinking` covers the 200ms after it drops out of
+// that range (or the flow itself hides) while its pop-out CSS transition
+// still plays.
+interface DotMarker {
+  circle: SVGCircleElement;
+  // Triangle-shape variant of the same marker (dotShape: 'triangle') — the
+  // <g> carries position+rotation (JS-set transform attribute), while the
+  // polygon inside carries the shrink pop-in/out CSS transition (see
+  // skeleton.ts's CSS comment on why these can't be the same element).
+  triangleGroup: SVGGElement;
+  trianglePolygon: SVGPolygonElement;
+  active: boolean;
+  shrinking: boolean;
+  hideTimer?: ReturnType<typeof setTimeout>;
+  // Lap-boundary pop state (see applyLapPop()) — independent of the
+  // visibility-driven `shrinking` above, this reuses the same shrink/grow CSS
+  // transition at each end of the *path* while the marker stays continuously
+  // active, instead of just once when the whole flow toggles on/off.
+  prevFrac: number; // last frame's 0..1 lap fraction, to detect a lap wrap
+  lapPopped: boolean; // true once this lap's near-end pop-out has fired
+}
+
+interface DotFlowState {
+  path: SVGPathElement;
+  length: number;
+  speed: number; // px/s
+  visible: boolean; // whether this flow currently carries power
+  reverse: boolean; // travel from path end to start
+  phase: number; // 0..1, shared travel position before per-marker spacing
+  maxDots: number; // this leg's own cap on top of options.dotCount — see DOTS
+  markers: DotMarker[];
+}
 
 // Home arc: circumference for r=47 (inner ring of the home circle, r=52).
 const ARC_LENGTH = 2 * Math.PI * 47; // ≈ 295.31
@@ -92,36 +143,23 @@ export class PowerFlow {
   private nodeStyle: NodeStyle = 'soft';
   private iconStyle: 'default' | 'full' = 'default';
   private dotShape: 'circle' | 'triangle' = 'circle';
+  private dotCount = 1;
   private curveBend = 1;
+  private rowGap = DEFAULT_ROW_GAP;
+  private columnGap = DEFAULT_COLUMN_GAP;
   // Tracks whether the consumer2/batteryLoad2 slot conflict was already active
   // last render, so the console warning fires once per transition into the
   // conflicting state rather than on every `update()` call.
   private hadSlotConflict = false;
 
-  // Per-dot animation state. We drive the dots ourselves (requestAnimationFrame)
+  // Per-flow animation state. We drive the dots ourselves (requestAnimationFrame)
   // instead of SMIL so a speed change keeps each dot's position continuous —
   // SMIL would restart the motion from the path start on every `dur` change,
-  // making the dots jump while a value is being dragged.
-  private dots: Record<
-    string,
-    {
-      circle: SVGCircleElement;
-      // Triangle-shape variant of the same dot (dotShape: 'triangle') — the
-      // <g> carries position+rotation (JS-set transform attribute), while
-      // the polygon inside carries the shrink pop-in/out CSS transition (see
-      // skeleton.ts's CSS comment on why these can't be the same element).
-      triangleGroup: SVGGElement;
-      trianglePolygon: SVGPolygonElement;
-      path: SVGPathElement;
-      length: number;
-      speed: number; // px/s
-      visible: boolean;
-      shrinking: boolean; // true while the shrink-out CSS transition plays
-      prog: number; // 0..1 along the path
-      reverse: boolean; // travel from path end to start
-      hideTimer?: ReturnType<typeof setTimeout>;
-    }
-  > = {};
+  // making the dots jump while a value is being dragged. Each flow can show
+  // several evenly-spaced dots (options.dotCount): `phase` is the shared 0..1
+  // travel position, and marker `i` sits at `(phase + i/dotCount) % 1` — see
+  // markerFraction().
+  private dots: Record<string, DotFlowState> = {};
   private raf = 0;
   private lastTime = 0;
 
@@ -146,37 +184,47 @@ export class PowerFlow {
   private initDots() {
     for (const d of DOTS) {
       const path = this.svg.querySelector<SVGPathElement>(`#${d.path}`)!;
-      const circle = this.el[`dot-${d.id}`] as SVGCircleElement;
-      const triangleGroup = this.el[`dot-tri-${d.id}`] as SVGGElement;
-      const trianglePolygon = triangleGroup.querySelector('polygon')!;
-      circle.style.display = 'none';
-      triangleGroup.style.display = 'none';
+      const markers: DotMarker[] = [];
+      for (let i = 0; i < MAX_DOTS_PER_TRACK; i++) {
+        const circle = this.el[`dot-${d.id}-${i}`] as SVGCircleElement;
+        const triangleGroup = this.el[`dot-tri-${d.id}-${i}`] as SVGGElement;
+        const trianglePolygon = triangleGroup.querySelector('polygon')!;
+        circle.style.display = 'none';
+        triangleGroup.style.display = 'none';
+        markers.push({
+          circle,
+          triangleGroup,
+          trianglePolygon,
+          active: false,
+          shrinking: false,
+          prevFrac: 0,
+          lapPopped: false,
+        });
+      }
       this.dots[d.id] = {
-        circle,
-        triangleGroup,
-        trianglePolygon,
         path,
         length: path.getTotalLength(),
         speed: 0,
         visible: false,
-        shrinking: false,
-        prog: Math.random(), // stagger start positions
         reverse: d.reverse ?? false,
+        phase: Math.random(), // stagger start positions
+        maxDots: d.maxDots ?? MAX_DOTS_PER_TRACK,
+        markers,
       };
     }
   }
 
   // The marker element currently shown for a dot (its `display` is toggled
   // in setDot()), depending on the active dotShape.
-  private activeMarker(s: PowerFlow['dots'][string]): SVGGraphicsElement {
-    return this.dotShape === 'triangle' ? s.triangleGroup : s.circle;
+  private activeMarker(m: DotMarker): SVGGraphicsElement {
+    return this.dotShape === 'triangle' ? m.triangleGroup : m.circle;
   }
 
   // The element that actually gets the `.shrunk` pop-in/out class — for
   // triangles that's the inner polygon, not the position/rotation-carrying
   // <g> (see the `dots` field comment above for why).
-  private shrinkTarget(s: PowerFlow['dots'][string]): Element {
-    return this.dotShape === 'triangle' ? s.trianglePolygon : s.circle;
+  private shrinkTarget(m: DotMarker): Element {
+    return this.dotShape === 'triangle' ? m.trianglePolygon : m.circle;
   }
 
   // Snapshots each node's *default*-mode icon transform and text y positions
@@ -247,6 +295,105 @@ export class PowerFlow {
     }
   }
 
+  // Every node prefix's (cx, cy), given the current row/column layout. Grid
+  // sits on the fixed middle row but a `columnGap`-moved column; home (and
+  // consumer1/consumer2/batteryLoad2/conflict, which share its column) sits
+  // on both a fixed row *and* fixed column — it never moves at all.
+  private static nodeXY(prefix: string, rows: RowLayout, cols: ColumnLayout): [number, number] {
+    const cy = PowerFlow.TOP_ROW_PREFIXES.includes(prefix)
+      ? rows.topY
+      : PowerFlow.BOTTOM_ROW_PREFIXES.includes(prefix)
+        ? rows.botY
+        : MID_ROW_Y;
+    const cx: Record<string, number> = {
+      grid: cols.col1,
+      solar: cols.col2,
+      home: cols.col3,
+      c1: cols.col3,
+      c2: cols.col3,
+      c3: cols.col4,
+      c4: cols.col4,
+      bat: cols.col2,
+      bl1: cols.col1,
+      bl2: cols.col3,
+      conflict: cols.col3,
+    };
+    return [cx[prefix] ?? cols.col3, cy];
+  }
+  private static readonly TOP_ROW_PREFIXES = ['solar', 'c1', 'c3'];
+  private static readonly BOTTOM_ROW_PREFIXES = ['bat', 'c2', 'c4', 'bl1', 'bl2', 'conflict'];
+
+  private setPathD(id: string, d: string) {
+    (this.el[id] as SVGPathElement | undefined)?.setAttribute('d', d);
+  }
+
+  // Repositions every node for the current `rowGap`/`columnGap`, plus the
+  // straight tracks, coverage rings and SoC ring that touch those rows/
+  // columns directly (the 6 curved tracks are handled by applyCurveBend(),
+  // which needs the same layout combined with `curveBend`).
+  //
+  // Each node's `cx`/`cy` are set together (see nodeXY()) rather than a row
+  // pass and a column pass separately — an icon's cached 'default'-mode
+  // transform (see below) encodes both in one string, so computing it from
+  // only one freshly-known coordinate while reading the other back from a
+  // possibly-stale DOM attribute would risk combining an old cx with a new
+  // cy (or vice versa) if rowGap and columnGap ever change in the same
+  // update() call.
+  private applyLayout() {
+    const rows = rowLayout(this.rowGap);
+    const cols = columnLayout(this.columnGap);
+    for (const { prefix, texts } of PowerFlow.ICON_LAYOUT_NODES) {
+      const [cx, cy] = PowerFlow.nodeXY(prefix, rows, cols);
+      const bg = this.el[`${prefix}-bg`] as SVGCircleElement | undefined;
+      bg?.setAttribute('cx', String(cx));
+      bg?.setAttribute('cy', String(cy));
+      const ring = this.el[`${prefix}-ring`] as SVGCircleElement | undefined;
+      ring?.setAttribute('cx', String(cx));
+      ring?.setAttribute('cy', String(cy));
+      for (const id of texts) (this.el[id] as SVGTextElement | undefined)?.setAttribute('x', String(cx));
+
+      // Refreshes `iconLayoutCache` (icon/text offsets from the node's own
+      // cx/cy are fixed — -18/+16/+29 for a 2-line node, -27/+5/+18/+31 for
+      // the battery's 3 lines; see skeleton.ts's original static values,
+      // only the position itself moves). This matters because
+      // applyIconStyle()'s 'default' branch restores from this cache rather
+      // than re-deriving it — without the refresh, switching iconStyle back
+      // to 'default' after a layout change would snap the icon back to its
+      // *construction-time* position.
+      const cached = this.iconLayoutCache[prefix];
+      if (!cached) continue;
+      const isBattery = prefix === 'bat';
+      const iconOffset = isBattery ? 27 : 18;
+      const textOffsets = isBattery ? [5, 18, 31] : [16, 29];
+      this.iconLayoutCache[prefix] = {
+        ...cached,
+        iconTransform: iconTransform(cx, cy - iconOffset, 28),
+        textY: textOffsets.map((o) => String(cy + o)),
+      };
+    }
+
+    // Grid's own export coverage rings — home's (arc-*) never move, since
+    // home sits on both a fixed row and column.
+    for (const id of ['garc-solar', 'garc-bat']) {
+      const el = this.el[id] as SVGCircleElement | undefined;
+      el?.setAttribute('cx', String(cols.col1));
+      el?.setAttribute('transform', `rotate(-90 ${cols.col1} ${MID_ROW_Y})`);
+    }
+    (this.el['bat-soc-arc'] as SVGCircleElement | undefined)?.setAttribute('cx', String(cols.col2));
+    (this.el['bat-soc-arc'] as SVGCircleElement | undefined)?.setAttribute('cy', String(rows.botY));
+    (this.el['bat-soc-arc'] as SVGCircleElement | undefined)?.setAttribute(
+      'transform',
+      `rotate(-90 ${cols.col2} ${rows.botY})`,
+    );
+
+    this.setPathD('p-grid-home', `M${cols.col1 + 52},${MID_ROW_Y} H${cols.col3 - 52}`);
+    this.setPathD('p-solar-bat', `M${cols.col2},${rows.topInner} V${rows.botInner}`);
+    this.setPathD('p-home-consumer1', `M${cols.col3},${MID_ROW_Y - 52} V${rows.topInner}`);
+    this.setPathD('p-home-consumer2', `M${cols.col3},${MID_ROW_Y + 52} V${rows.botInner}`);
+    this.setPathD('p-bat-batteryload1', `M${cols.col2 - 52},${rows.botY} H${cols.col1 + 52}`);
+    this.setPathD('p-bat-batteryload2', `M${cols.col2 + 52},${rows.botY} H${cols.col3 - 52}`);
+  }
+
   // Scales each of the 6 curved tracks' *tangent handles* — P1 relative to
   // P0, P2 relative to P3 — by `bend`, keeping their direction fixed. This
   // keeps the departure/arrival directions exactly as designed (e.g. "leaves
@@ -254,13 +401,14 @@ export class PowerFlow {
   // level, only changing how long the curve holds that direction before
   // turning: bend=0 collapses both handles onto their anchor point, which
   // degenerates the cubic bezier into the straight P0→P3 line; bend=1
-  // reproduces the skeleton's static `d` values exactly (the handles are
-  // already at that exact length); bend>1 stretches the handles further out,
-  // reading as a straighter departure/arrival with a sharper turn in the
-  // middle, rather than one continuously bulging arc.
+  // reproduces the skeleton's static `d` values exactly at the default
+  // `rowGap` (the handles are already at that exact length); bend>1
+  // stretches the handles further out, reading as a straighter
+  // departure/arrival with a sharper turn in the middle, rather than one
+  // continuously bulging arc.
   private applyCurveBend() {
     const bend = this.curveBend;
-    for (const { id, p0, p1, p2, p3 } of CURVES) {
+    for (const { id, p0, p1, p2, p3 } of curvesForLayout(this.rowGap, this.columnGap)) {
       const path = this.el[id] as SVGPathElement | undefined;
       if (!path) continue;
       const b1x = p0[0] + bend * (p1[0] - p0[0]);
@@ -269,9 +417,9 @@ export class PowerFlow {
       const b2y = p3[1] + bend * (p2[1] - p3[1]);
       path.setAttribute('d', `M${p0[0]},${p0[1]} C${b1x},${b1y} ${b2x},${b2y} ${p3[0]},${p3[1]}`);
     }
-    // Changing `d` changes each affected path's total length — every dot's
+    // Changing `d` changes each affected path's total length — every flow's
     // cached `length` (measured once in initDots()) would otherwise go stale
-    // and skew its speed/position math. `s.prog` is a 0..1 fraction, so
+    // and skew its speed/position math. `s.phase` is a 0..1 fraction, so
     // refreshing `length` here doesn't cause any jump.
     for (const id in this.dots) {
       const s = this.dots[id];
@@ -296,19 +444,49 @@ export class PowerFlow {
     for (const id of PowerFlow.COVERAGE_RING_IDS) this.el[id]?.classList.toggle('node-filled-ink', on);
   }
 
-  // How far (in px along the path) placeDot() samples on either side of a
+  // How far (in px along the path) placeMarker() samples on either side of a
   // triangle dot's position to find its direction of travel.
   private static readonly TANGENT_SAMPLE_PX = 0.5;
 
-  // Position along the path for a dot's current progress, honouring `reverse`.
-  // For triangle dots, also orients the arrowhead along its direction of
-  // travel — found via a central-difference sample around the current
-  // position, so it's correct for both `reverse` and non-`reverse` dots (and
-  // for paths shared by both directions, like p-bat-grid) without needing to
-  // special-case `reverse` itself.
-  private placeDot(s: PowerFlow['dots'][string]) {
-    const at = s.reverse ? 1 - s.prog : s.prog;
-    const currentLen = at * s.length;
+  // How many dots this particular flow actually shows right now — the global
+  // `dotCount` setting, further capped by the leg's own `maxDots` (short
+  // direct connections between grid-adjacent nodes cap lower; see DOTS).
+  private effectiveDotCount(s: DotFlowState): number {
+    return Math.max(1, Math.min(this.dotCount, s.maxDots));
+  }
+
+  // Marker `i`'s 0..1 position along the path: the flow's shared travel
+  // phase, offset by `i / count` and wrapped — so a flow's dots are always
+  // spaced evenly around the full path regardless of `phase`.
+  private markerFraction(s: DotFlowState, i: number): number {
+    const count = this.effectiveDotCount(s);
+    const f = s.phase + i / count;
+    return f - Math.floor(f);
+  }
+
+  // Pull-back from each path endpoint, in px, so a marker never visually
+  // overlaps the node it's arriving at or departing from. Tracks run
+  // edge-to-edge between node circles, so without this a marker centered
+  // exactly at frac 0/1 sits right on the node's boundary — the triangle
+  // shape pokes noticeably past it, since its tip leads 6px ahead of its own
+  // center point in the direction of travel.
+  private static readonly MARKER_END_INSET_PX = 4;
+
+  // Position along the path for marker `i`'s current progress, honouring
+  // `reverse`. For triangle dots, also orients the arrowhead along its
+  // direction of travel — found via a central-difference sample around the
+  // current position, so it's correct for both `reverse` and non-`reverse`
+  // dots (and for paths shared by both directions, like p-bat-grid) without
+  // needing to special-case `reverse` itself.
+  private placeMarker(s: DotFlowState, i: number) {
+    const m = s.markers[i];
+    const frac = this.markerFraction(s, i);
+    const at = s.reverse ? 1 - frac : frac;
+    // Clamp the inset to at most half the path so it can't invert on an
+    // extremely short leg (none currently are shorter than ~25px, but this
+    // keeps the math sane regardless).
+    const inset = Math.min(PowerFlow.MARKER_END_INSET_PX, s.length / 2);
+    const currentLen = inset + at * (s.length - 2 * inset);
     const p = s.path.getPointAtLength(currentLen);
     if (this.dotShape === 'triangle') {
       const dir = s.reverse ? -1 : 1;
@@ -320,25 +498,67 @@ export class PowerFlow {
         Math.max(0, Math.min(s.length, currentLen - dir * d)),
       );
       const angle = (Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * 180) / Math.PI;
-      s.triangleGroup.setAttribute('transform', `translate(${p.x} ${p.y}) rotate(${angle})`);
+      m.triangleGroup.setAttribute('transform', `translate(${p.x} ${p.y}) rotate(${angle})`);
     } else {
-      s.circle.setAttribute('cx', String(p.x));
-      s.circle.setAttribute('cy', String(p.y));
+      m.circle.setAttribute('cx', String(p.x));
+      m.circle.setAttribute('cy', String(p.y));
     }
   }
 
-  // Single animation loop for all dots. Advances each visible dot along its path
-  // by speed·dt, wrapping at the end. dt is capped so returning from a
-  // background tab doesn't teleport the dots.
+  // How long (ms) before a dot completes a lap it starts shrinking out —
+  // matches the `.dot.shrunk` / `.dot-tri.shrunk` CSS transition duration
+  // (see applyLapPop()), so by the time it visually reaches the end of the
+  // path it's already at scale 0, ready to pop back in at the start.
+  private static readonly LAP_POP_OUT_MS = 180;
+
+  // Fraction of a flow's full lap that LAP_POP_OUT_MS of travel covers at its
+  // current speed — capped so a very short/fast leg (see DOTS' `maxDots`)
+  // never spends more than a fifth of its lap shrunk.
+  private lapPopOutFraction(s: DotFlowState): number {
+    if (s.speed <= 0 || s.length <= 0) return 0;
+    return Math.min(0.2, (s.speed * (PowerFlow.LAP_POP_OUT_MS / 1000)) / s.length);
+  }
+
+  // Reuses the same shrink/grow CSS transition as setDot's visibility pop-in/
+  // out for every lap a marker completes while its flow stays continuously
+  // active: shrinks it just before it reaches the end of the path, then pops
+  // it back in the instant it wraps to the start, edge-triggered off its own
+  // `frac` — so a looping dot fades out/in at each end of its track instead
+  // of just vanishing at one end and reappearing at the other. Only called
+  // for markers that are `active`; a marker being retired by setDot (flow
+  // gone, or dotCount dropped) owns `shrunk` itself via `shrinking` instead.
+  private applyLapPop(s: DotFlowState, m: DotMarker, i: number) {
+    const frac = this.markerFraction(s, i);
+    const shrinkAt = 1 - this.lapPopOutFraction(s);
+    if (!m.lapPopped && frac >= shrinkAt) {
+      this.shrinkTarget(m).classList.add('shrunk');
+      m.lapPopped = true;
+    } else if (m.lapPopped && frac < m.prevFrac) {
+      this.shrinkTarget(m).classList.remove('shrunk');
+      m.lapPopped = false;
+    }
+    m.prevFrac = frac;
+  }
+
+  // Single animation loop for all dots. Advances each visible flow's shared
+  // phase by speed·dt, wrapping at the end, then repositions every one of its
+  // active/shrinking markers (and pops active ones at each lap boundary —
+  // see applyLapPop()). dt is capped so returning from a background tab
+  // doesn't teleport the dots.
   private tick = (now: number) => {
     const dt = Math.min((now - this.lastTime) / 1000, 0.05);
     this.lastTime = now;
     for (const id in this.dots) {
       const s = this.dots[id];
-      if ((!s.visible && !s.shrinking) || s.length === 0) continue;
-      s.prog += (s.speed * dt) / s.length;
-      s.prog -= Math.floor(s.prog); // wrap into [0, 1)
-      this.placeDot(s);
+      const animating = s.visible || s.markers.some((m) => m.active || m.shrinking);
+      if (!animating || s.length === 0) continue;
+      s.phase += (s.speed * dt) / s.length;
+      s.phase -= Math.floor(s.phase); // wrap into [0, 1)
+      s.markers.forEach((m, i) => {
+        if (!m.active && !m.shrinking) return;
+        if (m.active) this.applyLapPop(s, m, i);
+        this.placeMarker(s, i);
+      });
     }
     this.raf = requestAnimationFrame(this.tick);
   };
@@ -374,6 +594,20 @@ export class PowerFlow {
     if (settings?.dotShape !== undefined && settings.dotShape !== this.dotShape) {
       this.swapDotShape(settings.dotShape);
     }
+    if (settings?.dotCount !== undefined) {
+      this.dotCount = Math.max(1, Math.min(MAX_DOTS_PER_TRACK, Math.round(settings.dotCount)));
+    }
+    if (settings?.rowGap !== undefined) {
+      // Floor of 104 (2× node radius) keeps the top/bottom rows from
+      // overlapping the middle row; 250 is a generous ceiling against an
+      // absurdly stretched-out diagram.
+      this.rowGap = Math.max(104, Math.min(250, settings.rowGap));
+    }
+    if (settings?.columnGap !== undefined) {
+      // Same bounds as rowGap, for the same reason (2× node radius floor).
+      this.columnGap = Math.max(104, Math.min(250, settings.columnGap));
+    }
+    this.applyLayout();
     this.applyIconStyle();
     this.applyCurveBend();
     this.applyRingShadow();
@@ -437,20 +671,25 @@ export class PowerFlow {
     } = computeFlowAllocation(data, topo);
     const load = Math.max(loadWatts, 0);
 
-    // ViewBox: include the top row (solar / consumer1 / consumer3, edge y=8)
-    // and/or the bottom row (battery / consumer2 / consumer4 / batteryLoad1 /
-    // batteryLoad2, edge y=362) only when something occupies it, with an 8px
-    // margin. Absent rows are trimmed so the diagram never has a large empty
-    // band — e.g. grid+home+battery starts at the middle row. The 4th
-    // column (consumer3/consumer4, at x=490) only widens the viewBox when
-    // actually used.
+    // ViewBox: include the top row (solar / consumer1 / consumer3) and/or the
+    // bottom row (battery / consumer2 / consumer4 / batteryLoad1 /
+    // batteryLoad2) only when something occupies it, with an 8px margin
+    // beyond that row's own outer edge (which moves with `rowGap`). Absent
+    // rows are trimmed so the diagram never has a large empty band — e.g.
+    // grid+home+battery starts at the middle row, whose own edge (133,
+    // independent of `rowGap`) provides the margin instead. The 4th column
+    // (consumer3/consumer4) only widens the viewBox when actually used;
+    // `minX`/the 4th column's position both move with `columnGap`.
+    const { topOuter, botOuter } = rowLayout(this.rowGap);
+    const { col3, col4, minX } = columnLayout(this.columnGap);
     const hasTop = hasSolar || hasConsumer1 || hasConsumer3;
     const hasBottom = hasBattery || hasConsumer2 || hasConsumer4;
-    const minY = hasTop ? 0 : 125; // middle row (cy 185, edge 133) − 8 margin
-    const maxY = hasBottom ? 370 : 245; // battery edge 362 + 8 / home edge 237 + 8
-    const width = hasConsumer3 || hasConsumer4 ? 545 : 400; // 4th column edge 542 (490+52) + 3, matching the existing 400 = 397 (345+52) + 3
+    const minY = hasTop ? topOuter - 8 : MID_ROW_Y - 52 - 8;
+    const maxY = hasBottom ? botOuter + 8 : MID_ROW_Y + 52 + 8;
+    const maxX = (hasConsumer3 || hasConsumer4 ? col4 : col3) + 52 + 3;
+    const width = maxX - minX;
     const height = maxY - minY;
-    this.svg.setAttribute('viewBox', `0 ${minY} ${width} ${height}`);
+    this.svg.setAttribute('viewBox', `${minX} ${minY} ${width} ${height}`);
 
     // Give the host a natural aspect-ratio matching the current viewBox. When
     // the consumer sets an explicit height (e.g. a resizable container), that
@@ -696,7 +935,7 @@ export class PowerFlow {
   destroy() {
     cancelAnimationFrame(this.raf);
     for (const s of Object.values(this.dots)) {
-      if (s.hideTimer) clearTimeout(s.hideTimer);
+      for (const m of s.markers) if (m.hideTimer) clearTimeout(m.hideTimer);
     }
     this.root.innerHTML = '';
     this.el = {};
@@ -811,66 +1050,87 @@ export class PowerFlow {
     this.el[id]?.setAttribute('d', path);
   }
 
-  // Show/hide a dot and set its speed. Only the speed changes on a value update
-  // — the rAF loop keeps the position continuous, so dragging a slider never
-  // makes the dot jump back to the start.
+  // Show/hide a flow's dots (markers 0..dotCount-1) and set its speed. Only
+  // the speed changes on a value update while a marker stays active — the
+  // rAF loop keeps `phase` continuous, so dragging a slider never makes the
+  // dots jump back to the start. Called on every update() regardless of
+  // whether `visible` actually changed, so a `dotCount` change alone (flow
+  // staying visible throughout) still pops in/out exactly the markers whose
+  // index crossed the new count.
   // `marker`/`shrinkEl` are deliberately *not* captured once up front and
   // reused in the deferred callbacks below — `activeMarker`/`shrinkTarget`
   // depend on `this.dotShape`, and a dotShape change (swapDotShape()) can
-  // land while a dot is mid-shrink (the 200ms hideTimer, or even the pop-in
-  // rAF, hasn't fired yet). A stale closure would then hide/unshrink the
-  // *old* shape's element while swapDotShape has already switched the new
-  // shape's element to visible, leaving that one stuck on-screen forever at
-  // its last position — visible but attached to no active track. Each
+  // land while a marker is mid-shrink (the 200ms hideTimer, or even the
+  // pop-in rAF, hasn't fired yet). A stale closure would then hide/unshrink
+  // the *old* shape's element while swapDotShape has already switched the
+  // new shape's element to visible, leaving that one stuck on-screen forever
+  // at its last position — visible but attached to no active track. Each
   // callback re-resolves the marker/shrink target at fire time instead, so
   // it always acts on whatever shape is current by then.
   private setDot(id: string, visible: boolean, watts: number) {
     const s = this.dots[id];
-    if (visible) {
-      s.speed = this.flowSpeed(watts, s.length);
-      if (!s.visible) {
+    s.visible = visible;
+    if (visible) s.speed = this.flowSpeed(watts, s.length);
+    const count = this.effectiveDotCount(s);
+    s.markers.forEach((m, i) => {
+      const wantActive = visible && i < count;
+      if (wantActive && !m.active) {
         // Pop in: position first, show at scale(0), force reflow, then spring to full size.
-        if (s.hideTimer) { clearTimeout(s.hideTimer); s.hideTimer = undefined; }
-        s.visible = true;
-        s.shrinking = false;
-        this.placeDot(s);
-        this.shrinkTarget(s).classList.add('shrunk');
-        this.activeMarker(s).style.display = '';
+        if (m.hideTimer) { clearTimeout(m.hideTimer); m.hideTimer = undefined; }
+        m.active = true;
+        m.shrinking = false;
+        // Fresh lap-pop bookkeeping (see applyLapPop()) — starts wherever
+        // this marker's shared phase currently puts it, not necessarily at
+        // the path start (e.g. a higher dotCount activating a new marker
+        // mid-animation), so tick() doesn't mistake this for a lap wrap.
+        m.prevFrac = this.markerFraction(s, i);
+        m.lapPopped = false;
+        this.placeMarker(s, i);
+        this.shrinkTarget(m).classList.add('shrunk');
+        this.activeMarker(m).style.display = '';
         requestAnimationFrame(() => requestAnimationFrame(() => {
-          if (s.visible) this.shrinkTarget(s).classList.remove('shrunk');
+          if (m.active) this.shrinkTarget(m).classList.remove('shrunk');
         }));
+      } else if (!wantActive && m.active) {
+        // Shrink out: keep moving while scaling to 0, then hide after the transition.
+        m.active = false;
+        m.shrinking = true;
+        this.shrinkTarget(m).classList.add('shrunk');
+        m.hideTimer = setTimeout(() => {
+          this.activeMarker(m).style.display = 'none';
+          this.shrinkTarget(m).classList.remove('shrunk');
+          m.shrinking = false;
+          m.hideTimer = undefined;
+        }, 200);
       }
-    } else if (s.visible) {
-      // Shrink out: keep moving while scaling to 0, then hide after the transition.
-      s.visible = false;
-      s.shrinking = true;
-      this.shrinkTarget(s).classList.add('shrunk');
-      s.hideTimer = setTimeout(() => {
-        this.activeMarker(s).style.display = 'none';
-        this.shrinkTarget(s).classList.remove('shrunk');
-        s.shrinking = false;
-        s.hideTimer = undefined;
-      }, 200);
-    }
+    });
   }
 
-  // Live-swaps which marker shape is shown for every currently visible or
+  // Live-swaps which marker shape is shown for every currently active or
   // shrinking dot, so toggling dotShape mid-animation doesn't leave a dot
   // stuck invisible (old shape hidden, new shape never shown) or duplicated
   // (both shapes visible at once).
   private swapDotShape(newShape: 'circle' | 'triangle') {
     for (const id in this.dots) {
-      const s = this.dots[id];
-      if (!s.visible && !s.shrinking) continue;
-      this.activeMarker(s).style.display = 'none';
-      this.shrinkTarget(s).classList.remove('shrunk');
+      for (const m of this.dots[id].markers) {
+        if (!m.active && !m.shrinking) continue;
+        this.activeMarker(m).style.display = 'none';
+        this.shrinkTarget(m).classList.remove('shrunk');
+        // The new shape's element always starts unshrunk (just reset above),
+        // so clear any in-progress lap-pop bookkeeping (see applyLapPop()) —
+        // otherwise a marker mid lap-shrink at swap time would never
+        // re-trigger the shrink on its new shape's element for this lap.
+        m.lapPopped = false;
+      }
     }
     this.dotShape = newShape;
     for (const id in this.dots) {
       const s = this.dots[id];
-      if (!s.visible && !s.shrinking) continue;
-      this.activeMarker(s).style.display = '';
-      this.placeDot(s);
+      s.markers.forEach((m, i) => {
+        if (!m.active && !m.shrinking) return;
+        this.activeMarker(m).style.display = '';
+        this.placeMarker(s, i);
+      });
     }
   }
 

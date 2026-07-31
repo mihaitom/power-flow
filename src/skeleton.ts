@@ -12,8 +12,59 @@ const SVGNS = 'http://www.w3.org/2000/svg';
 // MDI paths live in a 24×24 box. We draw native SVG paths instead of
 // foreignObject because Safari/WebKit mis-positions foreignObject inside
 // scaled SVGs. Centers the icon at (centerX, centerY) and scales it to size.
-function iconTransform(centerX: number, centerY: number, size: number): string {
+export function iconTransform(centerX: number, centerY: number, size: number): string {
   return `translate(${centerX - size / 2} ${centerY - size / 2}) scale(${size / 24})`;
+}
+
+// The diagram's row/column layout. Columns sit a fixed 145px apart
+// (x=55/200/345/490 below); rows are laid out around the fixed middle row
+// (grid/home, always at MID_ROW_Y) with the top and bottom rows each
+// `rowGap` px above/below it — configurable via `options.rowGap` (see
+// core.ts's applyRowGap()). DEFAULT_ROW_GAP (125) is the original, always-
+// shipped spacing; it's slightly tighter than the 145px column gap. Pass
+// `rowGap: 145` to make vertical and horizontal spacing match exactly.
+export const MID_ROW_Y = 185;
+export const DEFAULT_ROW_GAP = 125;
+
+export interface RowLayout {
+  topY: number; // top row cy (solar / consumer1 / consumer3)
+  botY: number; // bottom row cy (battery / consumer2 / consumer4 / batteryLoad1 / batteryLoad2 / conflict)
+  topInner: number; // top row nodes' bottom edge, facing the middle row — topY + 52
+  botInner: number; // bottom row nodes' top edge, facing the middle row — botY − 52
+  topOuter: number; // top row nodes' top edge — topY − 52 (viewBox trimming)
+  botOuter: number; // bottom row nodes' bottom edge — botY + 52 (viewBox trimming)
+}
+
+export function rowLayout(rowGap: number): RowLayout {
+  const topY = MID_ROW_Y - rowGap;
+  const botY = MID_ROW_Y + rowGap;
+  return { topY, botY, topInner: topY + 52, botInner: botY - 52, topOuter: topY - 52, botOuter: botY + 52 };
+}
+
+// Columns, analogous to rows above — but unlike the row layout (symmetric
+// around a fixed middle), columns form a left-to-right chain of 4, each
+// `columnGap` px apart. Home's column (HOME_COL_X) is the fixed anchor —
+// home/consumer1/consumer2/batteryLoad2/conflict all sit on it and never
+// move horizontally, the same way grid/home's shared row never moves
+// vertically — so `columnGap` only shifts grid/solar/battery/batteryLoad1
+// (left of home) and consumer3/consumer4 (right of home).
+export const HOME_COL_X = 345;
+export const DEFAULT_COLUMN_GAP = 145;
+
+export interface ColumnLayout {
+  col1: number; // grid / batteryLoad1
+  col2: number; // solar / battery
+  col3: number; // home / consumer1 / consumer2 / batteryLoad2 / conflict — always HOME_COL_X
+  col4: number; // consumer3 / consumer4
+  minX: number; // col1's own outer edge minus a small margin (viewBox trimming)
+}
+
+export function columnLayout(columnGap: number): ColumnLayout {
+  const col3 = HOME_COL_X;
+  const col2 = col3 - columnGap;
+  const col1 = col2 - columnGap;
+  const col4 = col3 + columnGap;
+  return { col1, col2, col3, col4, minX: col1 - 52 - 3 };
 }
 
 // One entry per animated dot. `cls` selects the dot color via CSS — always
@@ -23,8 +74,19 @@ function iconTransform(centerX: number, centerY: number, size: number): string {
 // charging) are colored solar/grid respectively, not a shared "charging"
 // color. `reverse` animates the dot from the path's end to its start (used
 // to send a dot the opposite way along a path that is shared by two flow
-// directions).
-export const DOTS: { id: string; cls: string; path: string; reverse?: boolean }[] = [
+// directions). `maxDots` caps how many of `options.dotCount`'s dots this
+// particular leg ever shows — used for the four short direct connections
+// between grid-adjacent nodes (home↔consumer1/2, battery↔batteryload1/2),
+// where their path is too short for more than a couple of evenly-spaced dots
+// to read as separate rather than overlapping; unset means no extra cap
+// beyond `options.dotCount` itself.
+export const DOTS: {
+  id: string;
+  cls: string;
+  path: string;
+  reverse?: boolean;
+  maxDots?: number;
+}[] = [
   { id: 'solar-home', cls: 'solar', path: 'p-solar-home' },
   { id: 'solar-grid', cls: 'solar', path: 'p-solar-grid' },
   { id: 'grid-home', cls: 'grid', path: 'p-grid-home' },
@@ -33,13 +95,20 @@ export const DOTS: { id: string; cls: string; path: string; reverse?: boolean }[
   { id: 'solar-bat', cls: 'solar', path: 'p-solar-bat' },
   // Grid → battery shares the battery↔grid path, run in reverse (grid to battery).
   { id: 'grid-bat', cls: 'grid', path: 'p-bat-grid', reverse: true },
-  { id: 'home-consumer1', cls: 'consumer1', path: 'p-home-consumer1' },
-  { id: 'home-consumer2', cls: 'consumer2', path: 'p-home-consumer2' },
+  { id: 'home-consumer1', cls: 'consumer1', path: 'p-home-consumer1', maxDots: 2 },
+  { id: 'home-consumer2', cls: 'consumer2', path: 'p-home-consumer2', maxDots: 2 },
   { id: 'home-consumer3', cls: 'consumer3', path: 'p-home-consumer3' },
   { id: 'home-consumer4', cls: 'consumer4', path: 'p-home-consumer4' },
-  { id: 'bat-batteryload1', cls: 'battery-load1', path: 'p-bat-batteryload1' },
-  { id: 'bat-batteryload2', cls: 'battery-load2', path: 'p-bat-batteryload2' },
+  { id: 'bat-batteryload1', cls: 'battery-load1', path: 'p-bat-batteryload1', maxDots: 2 },
+  { id: 'bat-batteryload2', cls: 'battery-load2', path: 'p-bat-batteryload2', maxDots: 2 },
 ];
+
+// Upper bound on `options.dotCount` — how many evenly-spaced marker elements
+// are pre-rendered per flow in the static skeleton below. Markers beyond the
+// current `dotCount` just stay hidden (same pattern as topology's `display`
+// toggling), so path lengths still only need to be measured once and dots
+// never need to be created/destroyed at runtime.
+export const MAX_DOTS_PER_TRACK = 8;
 
 // Maps a dot's `cls` to the `--sfd-*` custom property holding its color, so a
 // track can be recolored to match the dot currently traveling along it (see
@@ -63,24 +132,69 @@ export function trackIdFor(pathId: string): string {
 }
 
 // The 6 tracks that are true cubic bezier curves (the rest are straight H/V
-// lines). Control points are exactly the static `d` values below, so
-// `curveBend = 1` (the default) reproduces the current geometry precisely —
-// see applyCurveBend() in core.ts, which blends each point toward the
-// straight P0→P3 line as `curveBend` drops toward 0.
-export const CURVES: {
-  id: string;
-  p0: [number, number];
-  p1: [number, number];
-  p2: [number, number];
-  p3: [number, number];
-}[] = [
-  { id: 'p-solar-home', p0: [212, 112], p1: [212, 150], p2: [256, 173], p3: [294, 173] },
-  { id: 'p-solar-grid', p0: [188, 112], p1: [188, 150], p2: [144, 173], p3: [106, 173] },
-  { id: 'p-bat-home', p0: [212, 258], p1: [212, 220], p2: [256, 197], p3: [294, 197] },
-  { id: 'p-bat-grid', p0: [188, 258], p1: [188, 220], p2: [144, 197], p3: [106, 197] },
-  { id: 'p-home-consumer4', p0: [396, 197], p1: [434, 197], p2: [478, 220], p3: [478, 258] },
-  { id: 'p-home-consumer3', p0: [396, 173], p1: [434, 173], p2: [478, 150], p3: [478, 112] },
-];
+// lines), as a function of the current `rowGap` and `columnGap` (see
+// rowLayout()/columnLayout() above). `curveBend = 1` (the default)
+// reproduces this geometry precisely — see applyCurveBend() in core.ts,
+// which blends each point toward the straight P0→P3 line as `curveBend`
+// drops toward 0. Each curve leaves its solar/battery-side node straight
+// (vertical) and arrives at its grid/home-side node straight (horizontal),
+// fanned out ±12 from that node's own center — 51 short of the node's edge
+// (radius 52) so the fan-out reads as a deliberate offset, not a stray gap.
+// The tangent handle length (38, giving p1/p2 their offset from p0/p3) is a
+// fixed visual choice independent of `rowGap`/`columnGap` — see the
+// curveBend comment on this function's usage for why that's fine even as
+// the travel distance changes with either gap.
+export function curvesForLayout(
+  rowGap: number,
+  columnGap: number,
+): { id: string; p0: [number, number]; p1: [number, number]; p2: [number, number]; p3: [number, number] }[] {
+  const { topInner, botInner } = rowLayout(rowGap);
+  const { col1, col2, col3, col4 } = columnLayout(columnGap);
+  return [
+    {
+      id: 'p-solar-home',
+      p0: [col2 + 12, topInner],
+      p1: [col2 + 12, topInner + 38],
+      p2: [col3 - 89, 173],
+      p3: [col3 - 51, 173],
+    },
+    {
+      id: 'p-solar-grid',
+      p0: [col2 - 12, topInner],
+      p1: [col2 - 12, topInner + 38],
+      p2: [col1 + 89, 173],
+      p3: [col1 + 51, 173],
+    },
+    {
+      id: 'p-bat-home',
+      p0: [col2 + 12, botInner],
+      p1: [col2 + 12, botInner - 38],
+      p2: [col3 - 89, 197],
+      p3: [col3 - 51, 197],
+    },
+    {
+      id: 'p-bat-grid',
+      p0: [col2 - 12, botInner],
+      p1: [col2 - 12, botInner - 38],
+      p2: [col1 + 89, 197],
+      p3: [col1 + 51, 197],
+    },
+    {
+      id: 'p-home-consumer4',
+      p0: [col3 + 51, 197],
+      p1: [col3 + 89, 197],
+      p2: [col4 - 12, botInner - 38],
+      p3: [col4 - 12, botInner],
+    },
+    {
+      id: 'p-home-consumer3',
+      p0: [col3 + 51, 173],
+      p1: [col3 + 89, 173],
+      p2: [col4 - 12, topInner + 38],
+      p3: [col4 - 12, topInner],
+    },
+  ];
+}
 
 export const CSS = `
 :host { display: block; }
@@ -178,45 +292,72 @@ export const CSS = `
 .node-filled-ink { filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)) drop-shadow(0 1px 5px rgba(0, 0, 0, 0.35)); }
 `;
 
+// The skeleton ships with `DEFAULT_ROW_GAP`/`DEFAULT_COLUMN_GAP`'s geometry
+// baked in — a caller requesting different `options.rowGap`/`columnGap`
+// values gets them applied immediately by core.ts's applyLayout()/
+// applyCurveBend() as part of the very first update(), before anything is
+// ever painted.
+const L = rowLayout(DEFAULT_ROW_GAP);
+const C = columnLayout(DEFAULT_COLUMN_GAP);
+const curveD = (c: ReturnType<typeof curvesForLayout>[number]) =>
+  `M${c.p0[0]},${c.p0[1]} C${c.p1[0]},${c.p1[1]} ${c.p2[0]},${c.p2[1]} ${c.p3[0]},${c.p3[1]}`;
+const [cSolarHome, cSolarGrid, cBatHome, cBatGrid, cHomeConsumer4, cHomeConsumer3] = curvesForLayout(
+  DEFAULT_ROW_GAP,
+  DEFAULT_COLUMN_GAP,
+);
+
 // Static SVG skeleton. Every node, track and dot is present from the start;
 // topology (battery/consumer1) is toggled via `display`, so path lengths only
 // have to be measured once and SMIL animations never restart on toggle.
 //
+// Row/column layout: columns form a left-to-right chain `columnGap` px apart
+// (DEFAULT_COLUMN_GAP, ${DEFAULT_COLUMN_GAP}), anchored on home's own fixed
+// column (HOME_COL_X); rows sit around the fixed middle row (grid/home,
+// y=${MID_ROW_Y}) with the top/bottom rows `rowGap` px above/below it —
+// DEFAULT_ROW_GAP (${DEFAULT_ROW_GAP}) is slightly tighter than the default
+// column gap. Both are configurable via `options.rowGap`/`options.columnGap`
+// — see rowLayout()/columnLayout() above.
+//
 // Diagonal paths fan out at the grid/home side by ±12 (y=173/197), mirroring
-// the fan-out at the solar/battery side (x=188/212).
+// the fan-out at the solar/battery side (±12 from col2).
 export const SKELETON = `
 <svg class="flow-svg" xmlns="${SVGNS}">
   <defs>
-    <path id="p-solar-home" d="M212,112 C212,150 256,173 294,173" />
-    <path id="p-solar-grid" d="M188,112 C188,150 144,173 106,173" />
-    <path id="p-grid-home" d="M107,185 H293" />
-    <path id="p-bat-home" d="M212,258 C212,220 256,197 294,197" />
-    <path id="p-bat-grid" d="M188,258 C188,220 144,197 106,197" />
-    <path id="p-solar-bat" d="M200,112 V258" />
-    <!-- consumer1 is the top-left slot (345,60), consumer2 the bottom-left
-         slot (345,310) — swapped from a naive 1=bottom/2=top numbering so
-         consumer1/2 read top-to-bottom like consumer3/4 do. -->
-    <path id="p-home-consumer1" d="M345,133 V112" />
-    <path id="p-home-consumer2" d="M345,237 V258" />
-    <!-- Home's 4th consumer, bottom-right (490,310). Home and this node sit
-         exactly (145,125) apart — the same offset as grid and battery — so
-         this is literally the p-bat-grid curve, reversed (that one runs
-         battery→grid, we need the grid→battery direction) and translated by
-         (290,0), the grid→home / battery→consumer4 offset. Every control
-         point stays at y ≤ 258 (consumer2/batteryLoad2's own top edge at
-         345,310), so the curve's convex hull stays entirely clear of that
-         node. -->
-    <path id="p-home-consumer4" d="M396,197 C434,197 478,220 478,258" />
-    <!-- Home's 3rd consumer, top-right (490,60) — the same curve as
-         p-home-consumer4, mirrored vertically around home's own row (y=185:
-         y' = 370 − y), so it stays clear of consumer1 (345,60) the same way
-         consumer4's curve stays clear of consumer2/batteryLoad2 (345,310). -->
-    <path id="p-home-consumer3" d="M396,173 C434,173 478,150 478,112" />
-    <!-- batteryLoad1 always sits in the always-free (55,310) slot beside the
-         battery. batteryLoad2 shares the (345,310) slot with consumer2 — see
-         the slot-conflict indicator below. -->
-    <path id="p-bat-batteryload1" d="M148,310 H107" />
-    <path id="p-bat-batteryload2" d="M252,310 H293" />
+    <path id="p-solar-home" d="${curveD(cSolarHome)}" />
+    <path id="p-solar-grid" d="${curveD(cSolarGrid)}" />
+    <path id="p-grid-home" d="M${C.col1 + 52},${MID_ROW_Y} H${C.col3 - 52}" />
+    <path id="p-bat-home" d="${curveD(cBatHome)}" />
+    <path id="p-bat-grid" d="${curveD(cBatGrid)}" />
+    <path id="p-solar-bat" d="M${C.col2},${L.topInner} V${L.botInner}" />
+    <!-- consumer1 is the top-left slot (${C.col3},${L.topY}), consumer2 the
+         bottom-left slot (${C.col3},${L.botY}) — swapped from a naive
+         1=bottom/2=top numbering so consumer1/2 read top-to-bottom like
+         consumer3/4 do. Both always share home's own column (HOME_COL_X),
+         so this track is unaffected by columnGap. -->
+    <path id="p-home-consumer1" d="M${C.col3},${MID_ROW_Y - 52} V${L.topInner}" />
+    <path id="p-home-consumer2" d="M${C.col3},${MID_ROW_Y + 52} V${L.botInner}" />
+    <!-- Home's 4th consumer, bottom-right (${C.col4},${L.botY}). Home and
+         this node sit exactly (${C.col4 - C.col3},${L.botY - MID_ROW_Y})
+         apart — the same offset as grid and battery — so this is literally
+         the p-bat-grid curve, reversed (that one runs battery→grid, we need
+         the grid→battery direction) and translated to the grid→home /
+         battery→consumer4 offset. Every control point stays at
+         y ≤ ${L.botInner} (consumer2/batteryLoad2's own top edge at
+         ${C.col3},${L.botY}), so the curve's convex hull stays entirely
+         clear of that node. -->
+    <path id="p-home-consumer4" d="${curveD(cHomeConsumer4)}" />
+    <!-- Home's 3rd consumer, top-right (${C.col4},${L.topY}) — the same
+         curve as p-home-consumer4, mirrored vertically around home's own row
+         (y=${MID_ROW_Y}: y' = ${2 * MID_ROW_Y} − y), so it stays clear of
+         consumer1 (${C.col3},${L.topY}) the same way consumer4's curve stays
+         clear of consumer2/batteryLoad2 (${C.col3},${L.botY}). -->
+    <path id="p-home-consumer3" d="${curveD(cHomeConsumer3)}" />
+    <!-- batteryLoad1 always sits in the always-free (${C.col1},${L.botY})
+         slot beside the battery. batteryLoad2 shares the
+         (${C.col3},${L.botY}) slot with consumer2 — see the slot-conflict
+         indicator below. -->
+    <path id="p-bat-batteryload1" d="M${C.col2 - 52},${L.botY} H${C.col1 + 52}" />
+    <path id="p-bat-batteryload2" d="M${C.col2 + 52},${L.botY} H${C.col3 - 52}" />
   </defs>
 
   <!-- Every track has an id (derived as "use-" + its path id minus the "p-"
@@ -239,39 +380,31 @@ export const SKELETON = `
   <use id="use-bat-batteryload1" href="#p-bat-batteryload1" class="track" data-topo="batteryLoad1" />
   <use id="use-bat-batteryload2" href="#p-bat-batteryload2" class="track" data-topo="batteryLoad2" />
 
-  ${DOTS.map(
-    (d) =>
-      `<circle id="dot-${d.id}" r="2" class="dot ${d.cls}" vector-effect="non-scaling-stroke" />
-  <g id="dot-tri-${d.id}" class="dot-tri-wrap">
-    <polygon points="-4,-3.5 -4,3.5 6,0" class="dot dot-tri ${d.cls}" vector-effect="non-scaling-stroke" />
-  </g>`,
-  ).join('\n  ')}
-
   <!-- ── Solar (top, optional) ── -->
   <g id="n-solar" class="node" data-topo="solar">
-    <circle cx="200" cy="60" r="52" class="node-bg" id="solar-bg" />
-    <circle cx="200" cy="60" r="52" class="node-ring" id="solar-ring" />
-    <path id="solar-icon" class="node-icon" transform="${iconTransform(200, 42, 28)}" d="${mdiSolarPowerVariant}" />
-    <text x="200" y="76" class="val-text" id="t-solar-val"></text>
-    <text x="200" y="89" class="lbl-text" id="t-solar-lbl"></text>
+    <circle cx="${C.col2}" cy="${L.topY}" r="52" class="node-bg" id="solar-bg" />
+    <circle cx="${C.col2}" cy="${L.topY}" r="52" class="node-ring" id="solar-ring" />
+    <path id="solar-icon" class="node-icon" transform="${iconTransform(C.col2, L.topY - 18, 28)}" d="${mdiSolarPowerVariant}" />
+    <text x="${C.col2}" y="${L.topY + 16}" class="val-text" id="t-solar-val"></text>
+    <text x="${C.col2}" y="${L.topY + 29}" class="lbl-text" id="t-solar-lbl"></text>
   </g>
 
   <!-- ── Grid (left) ── -->
   <g class="node">
-    <circle cx="55" cy="185" r="52" class="node-bg" id="grid-bg" />
-    <circle cx="55" cy="185" r="52" class="node-ring" id="grid-ring" />
-    <path id="grid-icon" class="node-icon" transform="${iconTransform(55, 167, 28)}" d="${mdiTransmissionTower}" />
-    <text x="55" y="201" class="val-text" id="t-grid-val"></text>
-    <text x="55" y="214" class="lbl-text" id="t-grid-lbl"></text>
+    <circle cx="${C.col1}" cy="${MID_ROW_Y}" r="52" class="node-bg" id="grid-bg" />
+    <circle cx="${C.col1}" cy="${MID_ROW_Y}" r="52" class="node-ring" id="grid-ring" />
+    <path id="grid-icon" class="node-icon" transform="${iconTransform(C.col1, MID_ROW_Y - 18, 28)}" d="${mdiTransmissionTower}" />
+    <text x="${C.col1}" y="${MID_ROW_Y + 16}" class="val-text" id="t-grid-val"></text>
+    <text x="${C.col1}" y="${MID_ROW_Y + 29}" class="lbl-text" id="t-grid-lbl"></text>
   </g>
 
   <!-- ── Home (right) ── -->
   <g class="node">
-    <circle cx="345" cy="185" r="52" class="node-bg" id="home-bg" />
-    <circle cx="345" cy="185" r="52" class="node-ring" id="home-ring" />
-    <path id="home-icon" class="node-icon" transform="${iconTransform(345, 167, 28)}" d="${mdiHome}" />
-    <text x="345" y="201" class="val-text" id="t-home-val"></text>
-    <text x="345" y="214" class="lbl-text" id="t-home-lbl"></text>
+    <circle cx="${C.col3}" cy="${MID_ROW_Y}" r="52" class="node-bg" id="home-bg" />
+    <circle cx="${C.col3}" cy="${MID_ROW_Y}" r="52" class="node-ring" id="home-ring" />
+    <path id="home-icon" class="node-icon" transform="${iconTransform(C.col3, MID_ROW_Y - 18, 28)}" d="${mdiHome}" />
+    <text x="${C.col3}" y="${MID_ROW_Y + 16}" class="val-text" id="t-home-val"></text>
+    <text x="${C.col3}" y="${MID_ROW_Y + 29}" class="lbl-text" id="t-home-lbl"></text>
   </g>
 
   <!-- Coverage rings for home/grid, drawn *after* (on top of) those two node
@@ -281,94 +414,114 @@ export const SKELETON = `
        fade them. The home ring shows how the load is sourced
        (solar/battery/grid); the grid ring shows how an export is sourced
        (solar/battery). Positioned at home/grid's own centers, so document
-       order relative to nodes elsewhere on the diagram doesn't matter. -->
+       order relative to nodes elsewhere on the diagram doesn't matter. Only
+       the grid-side rings (garc-*) move with columnGap — home's column is
+       fixed, so arc-*'s never need repositioning. -->
   <g>
-    <circle id="arc-solar" cx="345" cy="185" r="47" class="home-arc solar-arc" transform="rotate(-90 345 185)" />
-    <circle id="arc-bat" cx="345" cy="185" r="47" class="home-arc bat-arc" transform="rotate(-90 345 185)" />
-    <circle id="arc-grid" cx="345" cy="185" r="47" class="home-arc grid-arc" transform="rotate(-90 345 185)" />
-    <circle id="garc-solar" cx="55" cy="185" r="47" class="home-arc solar-arc" transform="rotate(-90 55 185)" />
-    <circle id="garc-bat" cx="55" cy="185" r="47" class="home-arc bat-arc" transform="rotate(-90 55 185)" />
+    <circle id="arc-solar" cx="${C.col3}" cy="${MID_ROW_Y}" r="47" class="home-arc solar-arc" transform="rotate(-90 ${C.col3} ${MID_ROW_Y})" />
+    <circle id="arc-bat" cx="${C.col3}" cy="${MID_ROW_Y}" r="47" class="home-arc bat-arc" transform="rotate(-90 ${C.col3} ${MID_ROW_Y})" />
+    <circle id="arc-grid" cx="${C.col3}" cy="${MID_ROW_Y}" r="47" class="home-arc grid-arc" transform="rotate(-90 ${C.col3} ${MID_ROW_Y})" />
+    <circle id="garc-solar" cx="${C.col1}" cy="${MID_ROW_Y}" r="47" class="home-arc solar-arc" transform="rotate(-90 ${C.col1} ${MID_ROW_Y})" />
+    <circle id="garc-bat" cx="${C.col1}" cy="${MID_ROW_Y}" r="47" class="home-arc bat-arc" transform="rotate(-90 ${C.col1} ${MID_ROW_Y})" />
   </g>
 
   <!-- ── House consumer 1 (above the house, optional) ── -->
   <g id="n-consumer1" class="node" data-topo="consumer1">
-    <circle cx="345" cy="60" r="52" class="node-bg" id="c1-bg" />
-    <circle cx="345" cy="60" r="52" class="node-ring" id="c1-ring" />
-    <path id="c1-icon" class="node-icon" transform="${iconTransform(345, 42, 28)}" d="${mdiPowerSocket}" />
-    <text x="345" y="76" class="val-text" id="t-c1-val"></text>
-    <text x="345" y="89" class="lbl-text" id="t-c1-lbl"></text>
+    <circle cx="${C.col3}" cy="${L.topY}" r="52" class="node-bg" id="c1-bg" />
+    <circle cx="${C.col3}" cy="${L.topY}" r="52" class="node-ring" id="c1-ring" />
+    <path id="c1-icon" class="node-icon" transform="${iconTransform(C.col3, L.topY - 18, 28)}" d="${mdiPowerSocket}" />
+    <text x="${C.col3}" y="${L.topY + 16}" class="val-text" id="t-c1-val"></text>
+    <text x="${C.col3}" y="${L.topY + 29}" class="lbl-text" id="t-c1-lbl"></text>
   </g>
 
   <!-- ── House consumer 3 (top-right, optional) ── -->
   <g id="n-consumer3" class="node" data-topo="consumer3">
-    <circle cx="490" cy="60" r="52" class="node-bg" id="c3-bg" />
-    <circle cx="490" cy="60" r="52" class="node-ring" id="c3-ring" />
-    <path id="c3-icon" class="node-icon" transform="${iconTransform(490, 42, 28)}" d="${mdiPowerSocket}" />
-    <text x="490" y="76" class="val-text" id="t-c3-val"></text>
-    <text x="490" y="89" class="lbl-text" id="t-c3-lbl"></text>
+    <circle cx="${C.col4}" cy="${L.topY}" r="52" class="node-bg" id="c3-bg" />
+    <circle cx="${C.col4}" cy="${L.topY}" r="52" class="node-ring" id="c3-ring" />
+    <path id="c3-icon" class="node-icon" transform="${iconTransform(C.col4, L.topY - 18, 28)}" d="${mdiPowerSocket}" />
+    <text x="${C.col4}" y="${L.topY + 16}" class="val-text" id="t-c3-val"></text>
+    <text x="${C.col4}" y="${L.topY + 29}" class="lbl-text" id="t-c3-lbl"></text>
   </g>
 
   <!-- ── Battery (bottom, optional) ── -->
   <g id="n-battery" class="node" data-topo="battery">
-    <circle cx="200" cy="310" r="52" class="node-bg" id="bat-bg" />
-    <circle id="bat-soc-arc" cx="200" cy="310" r="47" class="home-arc" transform="rotate(-90 200 310)" />
-    <circle cx="200" cy="310" r="52" class="node-ring" id="bat-ring" />
-    <path id="bat-icon" class="node-icon" transform="${iconTransform(200, 283, 28)}" d="${mdiBatteryMedium}" />
-    <text x="200" y="315" class="val-text" id="t-bat-soc"></text>
-    <text x="200" y="328" class="val-text" id="t-bat-watts" style="font-size: 11px; opacity: 0.75"></text>
-    <text x="200" y="341" class="lbl-text" id="t-bat-lbl"></text>
+    <circle cx="${C.col2}" cy="${L.botY}" r="52" class="node-bg" id="bat-bg" />
+    <circle id="bat-soc-arc" cx="${C.col2}" cy="${L.botY}" r="47" class="home-arc" transform="rotate(-90 ${C.col2} ${L.botY})" />
+    <circle cx="${C.col2}" cy="${L.botY}" r="52" class="node-ring" id="bat-ring" />
+    <path id="bat-icon" class="node-icon" transform="${iconTransform(C.col2, L.botY - 27, 28)}" d="${mdiBatteryMedium}" />
+    <text x="${C.col2}" y="${L.botY + 5}" class="val-text" id="t-bat-soc"></text>
+    <text x="${C.col2}" y="${L.botY + 18}" class="val-text" id="t-bat-watts" style="font-size: 11px; opacity: 0.75"></text>
+    <text x="${C.col2}" y="${L.botY + 31}" class="lbl-text" id="t-bat-lbl"></text>
   </g>
 
   <!-- ── House consumer 2 (below the house, optional) ── -->
   <g id="n-consumer2" class="node" data-topo="consumer2">
-    <circle cx="345" cy="310" r="52" class="node-bg" id="c2-bg" />
-    <circle cx="345" cy="310" r="52" class="node-ring" id="c2-ring" />
-    <path id="c2-icon" class="node-icon" transform="${iconTransform(345, 292, 28)}" d="${mdiPowerSocket}" />
-    <text x="345" y="326" class="val-text" id="t-c2-val"></text>
-    <text x="345" y="339" class="lbl-text" id="t-c2-lbl"></text>
+    <circle cx="${C.col3}" cy="${L.botY}" r="52" class="node-bg" id="c2-bg" />
+    <circle cx="${C.col3}" cy="${L.botY}" r="52" class="node-ring" id="c2-ring" />
+    <path id="c2-icon" class="node-icon" transform="${iconTransform(C.col3, L.botY - 18, 28)}" d="${mdiPowerSocket}" />
+    <text x="${C.col3}" y="${L.botY + 16}" class="val-text" id="t-c2-val"></text>
+    <text x="${C.col3}" y="${L.botY + 29}" class="lbl-text" id="t-c2-lbl"></text>
   </g>
 
   <!-- ── House consumer 4 (bottom-right, optional) ── -->
   <g id="n-consumer4" class="node" data-topo="consumer4">
-    <circle cx="490" cy="310" r="52" class="node-bg" id="c4-bg" />
-    <circle cx="490" cy="310" r="52" class="node-ring" id="c4-ring" />
-    <path id="c4-icon" class="node-icon" transform="${iconTransform(490, 292, 28)}" d="${mdiPowerSocket}" />
-    <text x="490" y="326" class="val-text" id="t-c4-val"></text>
-    <text x="490" y="339" class="lbl-text" id="t-c4-lbl"></text>
+    <circle cx="${C.col4}" cy="${L.botY}" r="52" class="node-bg" id="c4-bg" />
+    <circle cx="${C.col4}" cy="${L.botY}" r="52" class="node-ring" id="c4-ring" />
+    <path id="c4-icon" class="node-icon" transform="${iconTransform(C.col4, L.botY - 18, 28)}" d="${mdiPowerSocket}" />
+    <text x="${C.col4}" y="${L.botY + 16}" class="val-text" id="t-c4-val"></text>
+    <text x="${C.col4}" y="${L.botY + 29}" class="lbl-text" id="t-c4-lbl"></text>
   </g>
 
   <!-- ── Battery load 1 (beside the battery, optional) — always fits in the
        bottom row, no matter which other optional nodes are shown. ── -->
   <g id="n-batteryload1" class="node" data-topo="batteryLoad1">
-    <circle cx="55" cy="310" r="52" class="node-bg" id="bl1-bg" />
-    <circle cx="55" cy="310" r="52" class="node-ring" id="bl1-ring" />
-    <path id="bl1-icon" class="node-icon" transform="${iconTransform(55, 292, 28)}" d="${mdiPowerSocket}" />
-    <text x="55" y="326" class="val-text" id="t-bl1-val"></text>
-    <text x="55" y="339" class="lbl-text" id="t-bl1-lbl"></text>
+    <circle cx="${C.col1}" cy="${L.botY}" r="52" class="node-bg" id="bl1-bg" />
+    <circle cx="${C.col1}" cy="${L.botY}" r="52" class="node-ring" id="bl1-ring" />
+    <path id="bl1-icon" class="node-icon" transform="${iconTransform(C.col1, L.botY - 18, 28)}" d="${mdiPowerSocket}" />
+    <text x="${C.col1}" y="${L.botY + 16}" class="val-text" id="t-bl1-val"></text>
+    <text x="${C.col1}" y="${L.botY + 29}" class="lbl-text" id="t-bl1-lbl"></text>
   </g>
 
-  <!-- ── Battery load 2 (optional) — shares its slot (345,310) with consumer2;
-       see the slot-conflict indicator below. ── -->
+  <!-- ── Battery load 2 (optional) — shares its slot (${C.col3},${L.botY})
+       with consumer2; see the slot-conflict indicator below. ── -->
   <g id="n-batteryload2" class="node" data-topo="batteryLoad2">
-    <circle cx="345" cy="310" r="52" class="node-bg" id="bl2-bg" />
-    <circle cx="345" cy="310" r="52" class="node-ring" id="bl2-ring" />
-    <path id="bl2-icon" class="node-icon" transform="${iconTransform(345, 292, 28)}" d="${mdiPowerSocket}" />
-    <text x="345" y="326" class="val-text" id="t-bl2-val"></text>
-    <text x="345" y="339" class="lbl-text" id="t-bl2-lbl"></text>
+    <circle cx="${C.col3}" cy="${L.botY}" r="52" class="node-bg" id="bl2-bg" />
+    <circle cx="${C.col3}" cy="${L.botY}" r="52" class="node-ring" id="bl2-ring" />
+    <path id="bl2-icon" class="node-icon" transform="${iconTransform(C.col3, L.botY - 18, 28)}" d="${mdiPowerSocket}" />
+    <text x="${C.col3}" y="${L.botY + 16}" class="val-text" id="t-bl2-val"></text>
+    <text x="${C.col3}" y="${L.botY + 29}" class="lbl-text" id="t-bl2-lbl"></text>
   </g>
 
-  <!-- ── Slot conflict indicator (345,310) — shown instead of both consumer2
-       and batteryLoad2 when a caller sets both at once (they share this
-       position; see update()'s hasSlotConflict). Styled directly with fixed
-       colors in JS rather than a FlowColors entry, since it signals a data
-       misconfiguration rather than a themable flow. ── -->
+  <!-- ── Slot conflict indicator (${C.col3},${L.botY}) — shown instead of
+       both consumer2 and batteryLoad2 when a caller sets both at once (they
+       share this position; see update()'s hasSlotConflict). Styled directly
+       with fixed colors in JS rather than a FlowColors entry, since it
+       signals a data misconfiguration rather than a themable flow. ── -->
   <g id="n-slot-conflict" class="node" data-topo="slotConflict">
-    <circle cx="345" cy="310" r="52" class="node-bg" id="conflict-bg" />
-    <circle cx="345" cy="310" r="52" class="node-ring" id="conflict-ring" />
-    <path id="conflict-icon" class="node-icon" transform="${iconTransform(345, 292, 28)}" d="${mdiAlertCircle}" />
-    <text x="345" y="326" class="val-text" id="t-conflict-val">Conflict</text>
-    <text x="345" y="339" class="lbl-text" id="t-conflict-desc">Hover for details</text>
+    <circle cx="${C.col3}" cy="${L.botY}" r="52" class="node-bg" id="conflict-bg" />
+    <circle cx="${C.col3}" cy="${L.botY}" r="52" class="node-ring" id="conflict-ring" />
+    <path id="conflict-icon" class="node-icon" transform="${iconTransform(C.col3, L.botY - 18, 28)}" d="${mdiAlertCircle}" />
+    <text x="${C.col3}" y="${L.botY + 16}" class="val-text" id="t-conflict-val">Conflict</text>
+    <text x="${C.col3}" y="${L.botY + 29}" class="lbl-text" id="t-conflict-desc">Hover for details</text>
     <title id="conflict-title">consumer2 and batteryLoad2 cannot both be set — they share the same position. See the "Consumer slot layout" section of the README.</title>
   </g>
+
+  <!-- Dots are drawn last (on top of every node) — a track's path runs all
+       the way to its endpoint node's own edge, so a marker sitting at either
+       end of its travel is centered right on that edge. Painted earlier (as
+       these used to be, before the node bodies), the opaque node background
+       would cover the half of the marker that overlaps the node's circle —
+       worst for the triangle shape, whose pointed tip leads into the node
+       and so is the first (and most visible) part clipped away. -->
+  ${DOTS.map((d) =>
+    Array.from(
+      { length: MAX_DOTS_PER_TRACK },
+      (_, i) =>
+        `<circle id="dot-${d.id}-${i}" r="2" class="dot ${d.cls}" vector-effect="non-scaling-stroke" />
+  <g id="dot-tri-${d.id}-${i}" class="dot-tri-wrap">
+    <polygon points="-4,-3.5 -4,3.5 6,0" class="dot dot-tri ${d.cls}" vector-effect="non-scaling-stroke" />
+  </g>`,
+    ).join('\n  '),
+  ).join('\n  ')}
 </svg>
 `;

@@ -32,6 +32,12 @@ import {
   dotShapeInp,
   curveBendInp,
   vCurveBend,
+  dotCountInp,
+  vDotCount,
+  rowGapInp,
+  vRowGap,
+  columnGapInp,
+  vColumnGap,
   currentNodeStyle,
   setNodeStyle,
 } from './playground-state';
@@ -214,6 +220,12 @@ function buildSnippet(fw: string): string {
     if (dotShapeInp.checked) optFields.push(`${optInner}dotShape: "triangle"`);
     if (+curveBendInp.value !== 1)
       optFields.push(`${optInner}curveBend: ${+curveBendInp.value}`);
+    if (+dotCountInp.value !== 1)
+      optFields.push(`${optInner}dotCount: ${+dotCountInp.value}`);
+    if (+rowGapInp.value !== 125)
+      optFields.push(`${optInner}rowGap: ${+rowGapInp.value}`);
+    if (+columnGapInp.value !== 145)
+      optFields.push(`${optInner}columnGap: ${+columnGapInp.value}`);
     const optionsLiteral = optFields.length
       ? `{\n${optFields.join(',\n')},\n${pad}}`
       : null;
@@ -408,6 +420,9 @@ interface ShareState {
   iconStyle?: true;
   dotShape?: true;
   curveBend?: number;
+  dotCount?: number;
+  rowGap?: number;
+  columnGap?: number;
   colors?: Record<string, string>;
   topology?: Record<string, false>;
 }
@@ -453,6 +468,9 @@ function encodeState(): ShareState {
   if (iconStyleInp.checked) state.iconStyle = true;
   if (dotShapeInp.checked) state.dotShape = true;
   if (+curveBendInp.value !== 1) state.curveBend = +curveBendInp.value;
+  if (+dotCountInp.value !== 1) state.dotCount = +dotCountInp.value;
+  if (+rowGapInp.value !== 125) state.rowGap = +rowGapInp.value;
+  if (+columnGapInp.value !== 145) state.columnGap = +columnGapInp.value;
 
   const changedColors = Object.fromEntries(
     Object.entries(cinp).filter(
@@ -495,6 +513,9 @@ document.addEventListener('pf:statechange', syncUrl);
   iconStyleInp,
   dotShapeInp,
   curveBendInp,
+  dotCountInp,
+  rowGapInp,
+  columnGapInp,
   ...Object.values(cinp),
   ...Object.values(topoInp),
 ].forEach((i) => i.addEventListener('input', syncUrl));
@@ -550,6 +571,15 @@ copyLinkBtn.addEventListener('click', () => {
   curveBendInp.value = String(s.curveBend ?? 1);
   vCurveBend.textContent = `${curveBendInp.value}×`;
   el.options = { ...el.options, curveBend: +curveBendInp.value };
+  dotCountInp.value = String(s.dotCount ?? 1);
+  vDotCount.textContent = dotCountInp.value;
+  el.options = { ...el.options, dotCount: +dotCountInp.value };
+  rowGapInp.value = String(s.rowGap ?? 125);
+  vRowGap.textContent = `${rowGapInp.value}px`;
+  el.options = { ...el.options, rowGap: +rowGapInp.value };
+  columnGapInp.value = String(s.columnGap ?? 145);
+  vColumnGap.textContent = `${columnGapInp.value}px`;
+  el.options = { ...el.options, columnGap: +columnGapInp.value };
 
   for (const [k, i] of Object.entries(cinp)) {
     const v = s.colors?.[k];
