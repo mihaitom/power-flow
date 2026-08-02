@@ -1,0 +1,63 @@
+name: Bug report
+description: Something in the diagram looks wrong or doesn't behave as documented
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! The fastest way to show me what's wrong
+        is a playground link — open the
+        [live playground](https://mihaitom.github.io/power-flow/), set up
+        the data/options that reproduce the problem, click **Copy link**,
+        and paste it below. That link encodes your exact `data` + `options`,
+        so we see precisely what you saw.
+
+  - type: input
+    id: playground-link
+    attributes:
+      label: Playground link showing the issue
+      description: >-
+        Reproduce the issue at
+        https://mihaitom.github.io/power-flow/, click "Copy link", and paste
+        the URL here.
+      placeholder: https://mihaitom.github.io/power-flow/?s=...
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: powerflow version
+      placeholder: "1.2.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browsers
+    attributes:
+      label: Browser(s)
+      multiple: true
+      options:
+        - Chrome / Chromium-based
+        - Firefox / Waterfox
+        - Safari
+        - Other (see additional context)
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Screenshots, console errors, or anything else that helps.
+    validations:
+      required: false
