@@ -394,6 +394,16 @@ pf.options = { ...pf.options, nodeStyle: 'filled' }; // accent-colored backgroun
 per node — and relies on a drop shadow (not a per-node contrast pick) to
 stay legible against whatever accent color that node happens to have.
 
+> **Known issue:** in Firefox/Waterfox, that drop shadow can render visibly
+> pixelated on the home/grid coverage rings and the battery SoC ring when
+> `nodeStyle: 'filled'` is combined with a large rendered size (e.g. the
+> diagram filling a big container). Firefox rasterizes SVG CSS filters at a
+> resolution tied to the diagram's internal coordinate space rather than its
+> final on-screen size, so the effect shows up whenever that gap is large —
+> whether the diagram is loaded at that size directly or grows into it later.
+> Not currently reproducible in Chrome/Chromium-based browsers. Workaround:
+> use a different `nodeStyle` at large sizes in Firefox/Waterfox.
+
 ### `iconStyle`
 
 ```ts
