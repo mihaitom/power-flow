@@ -180,13 +180,16 @@ export class PowerFlow {
   // several of those run every animation frame (tick()'s comet loop).
   private ringPerimeter = ARC_LENGTH;
   // Extra dashoffset (as a fraction of `ringPerimeter`) needed to land a
-  // ring's 0%-progress point at 12 o'clock — 0.25 for the circle variant
-  // (a <rect rx=ry=47>, whose own implicit path start isn't already there),
-  // 0 for square/hexagon (both explicit <polygon>s built with a vertex
-  // placed exactly at top-center, so they need no correction — see
-  // applyRingShape() and skeleton.ts's squareRingPoints()/
+  // ring's 0%-progress point at 12 o'clock — 0.75 for the circle variant
+  // (a <rect rx=ry=47 transform="rotate(-90 cx cy)">: the rect's own
+  // implicit path start is already at top-center, but the -90° rotation
+  // carries that point to 9 o'clock, so the dash pattern needs to start
+  // 3/4 of the way around — not 1/4 — to land back at 12), 0 for
+  // square/hexagon (both explicit <polygon>s built with a vertex placed
+  // exactly at top-center and no rotation, so they need no correction —
+  // see applyRingShape() and skeleton.ts's squareRingPoints()/
   // hexagonRingPoints()).
-  private ringStartFraction = 0.25;
+  private ringStartFraction = 0.75;
   private iconStyle: 'default' | 'full' = 'default';
   private dotShape: DotShape = 'circle';
   private dotCount = 1;
@@ -680,7 +683,7 @@ export class PowerFlow {
     const suffix = this.ringShapeSuffix();
     this.ringPerimeter =
       this.nodeShape === 'square' ? RING_PERIMETER_SQUARE : this.nodeShape === 'hexagon' ? RING_PERIMETER_HEX : ARC_LENGTH;
-    this.ringStartFraction = this.nodeShape === 'circle' ? 0.25 : 0;
+    this.ringStartFraction = this.nodeShape === 'circle' ? 0.75 : 0;
     for (const id of PowerFlow.RING_IDS) {
       for (const variant of ['', '-square', '-hex']) {
         const el = this.el[`${id}${variant}`] as SVGElement | undefined;
@@ -828,7 +831,10 @@ export class PowerFlow {
         layerPhase -= Math.floor(layerPhase); // wrap into [0, 1)
         el.setAttribute(
           'stroke-dashoffset',
-          String(this.batteryCometDirection * -layerPhase * this.ringPerimeter),
+          String(
+            this.ringPerimeter * this.ringStartFraction +
+              this.batteryCometDirection * -layerPhase * this.ringPerimeter,
+          ),
         );
       }
     }
@@ -1175,7 +1181,8 @@ export class PowerFlow {
         data.batterySoc != null
           ? Math.max(0, Math.min(100, data.batterySoc)) / 100
           : 0;
-      socArc.style.strokeDasharray = `${pct * this.ringPerimeter} ${this.ringPerimeter}`;
+      socArc.style.strokeDasharray = `${pct * this.ringPerimeter} ${this.ringPerimeter - pct * this.ringPerimeter}`;
+      socArc.style.strokeDashoffset = `${this.ringPerimeter * this.ringStartFraction}`;
       this.applyBatteryHighlight(batteryWatts, pct);
     }
 
@@ -1478,7 +1485,8 @@ export class PowerFlow {
     const group = this.el['bat-charge-highlight-group'] as SVGGElement | undefined;
     const mask = this.el[`bat-soc-mask-arc${this.ringShapeSuffix()}`] as SVGGraphicsElement | undefined;
     if (!group || !mask) return;
-    mask.setAttribute('stroke-dasharray', `${pct * this.ringPerimeter} ${this.ringPerimeter}`);
+    mask.setAttribute('stroke-dasharray', `${pct * this.ringPerimeter} ${this.ringPerimeter - pct * this.ringPerimeter}`);
+    mask.setAttribute('stroke-dashoffset', `${this.ringPerimeter * this.ringStartFraction}`);
     const rate = Math.abs(batteryWatts);
     const active = this.batteryChargeHighlight && rate > 0;
     group.classList.toggle('active', active);

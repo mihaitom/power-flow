@@ -7,9 +7,31 @@ Reconstructed from git history for versions that predate this file — dates
 are the release commit's date, entries are grouped by what they mean for
 consumers of the package rather than a raw commit log.
 
-## [Unreleased]
+## [1.2.0] — 2026-08-02
 
+### Added
 
+- `nodeShape` option (`'circle'` default / `'square'` / `'hexagon'`) for
+  every node's background and ring, with smooth circle↔square morphing;
+  hexagon is a true regular hexagon (equal side lengths), so it's wider than
+  the other two shapes to keep every side the same length
+- Coverage, SoC and battery charge-highlight rings now follow the selected
+  `nodeShape` instead of always being circular
+- `trackPulse` option — pulses an actively-carrying track's brightness on
+  top of its traveling dot(s), tempo scaled to that flow's own speed
+- The diagram's `viewBox` widens automatically when `nodeShape: 'hexagon'`
+  is active, so hexagon nodes aren't clipped at the diagram's edge
+
+### Changed
+
+- **Breaking (visual) for explicit `curveBend` values**: `curveBend` now
+  behaves as a corner radius instead of a curve-bulge amount — `0` is a
+  sharp, un-rounded 90° corner and `2.5` (the max) is a direct straight
+  line, the inverse of the previous meaning (where `0` was the straight
+  line and higher values sharpened the corner). Any consumer explicitly
+  setting `curveBend` to a non-default value will see different geometry
+  after upgrading; the default (`1`) still renders a similarly moderate
+  curve
 
 ## [1.1.0] — 2026-07-31
 
@@ -87,7 +109,8 @@ Initial public release.
 - `<power-flow>` web component and vanilla `PowerFlow` API
 - Demo/playground site, deployed to GitHub Pages
 
-[Unreleased]: https://github.com/mihaitom/power-flow/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/mihaitom/power-flow/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/mihaitom/power-flow/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/mihaitom/power-flow/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/mihaitom/power-flow/compare/v0.1.4...v1.0.0
 [0.1.4]: https://github.com/mihaitom/power-flow/compare/v0.1.3...v0.1.4

@@ -24,23 +24,19 @@ consumer slots** — with dots whose speed is proportional to the actual power.
 
 ---
 
-Same component, four looks — all just an <a href="#nodestyle"><code>options.nodeStyle</code></a> away:
+Same component, four looks — each one stacking several appearance options at
+once. Click any of these to open that exact combination in the live
+playground:
 
-<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-outline.gif" alt="powerflow — outline node style with chevron flow dots, showing all four consumer slots plus a battery-fed load at once" height="420" />
-
-<sub><code>outline</code> — the extra column only appears because this scenario actually uses <code>consumer3</code>/<code>consumer4</code>, plus <a href="#dotshape"><code>dotShape: 'chevron'</code></a>.</sub>
-
-<br /><br />
-
-<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-filled.gif" alt="powerflow — filled node style with full-size background icons and lightning-bolt flow dots, a balcony PV setup wired to charge only the battery" height="420" />
-
-<sub><code>filled</code> — a balcony-PV <a href="#flowtopology"><code>topology</code></a> where solar can only reach the battery, plus <a href="#iconstyle"><code>iconStyle: 'full'</code></a> and <a href="#dotshape"><code>dotShape: 'bolt'</code></a> on top.</sub>
+<a href="https://mihaitom.github.io/power-flow/?s=eyJoYXNTb2xhciI6dHJ1ZSwiaGFzQmF0Ijp0cnVlLCJoYXNDMSI6dHJ1ZSwiaGFzQzIiOnRydWUsImhhc0MzIjp0cnVlLCJoYXNDNCI6dHJ1ZSwiaGFzQmwxIjp0cnVlLCJoYXNCbDIiOmZhbHNlLCJzb2xhciI6OTAwMCwibG9hZCI6ODIwMCwiYmF0dGVyeSI6NTAwLCJzb2MiOjY5LCJjb25zdW1lcjEiOjMwMDAsImNvbnN1bWVyMiI6MTIwMCwiY29uc3VtZXIzIjo5MDAsImNvbnN1bWVyNCI6MTYwMCwiYmF0dGVyeUxvYWQxIjo4MDAsImJhdHRlcnlMb2FkMiI6MCwic3BlZWQiOjEsIm5vZGVTdHlsZSI6Im91dGxpbmUiLCJub2RlU2hhcGUiOiJoZXhhZ29uIiwiZG90U2hhcGUiOiJzcGFyayIsInRyYWNrUHVsc2UiOnRydWUsImN1cnZlQmVuZCI6Mi41fQ"><img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-outline.gif" alt="powerflow — outline node style, hexagon node shape, sparkle flow dots, pulsing tracks and dead-straight connections, showing all four consumer slots plus both battery-fed loads at once" height="420" /></a>
 
 <br /><br />
 
-<img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-tonal.gif" alt="powerflow — tonal node style with sparkle flow dots" height="420" />
+<a href="https://mihaitom.github.io/power-flow/?s=eyJoYXNTb2xhciI6dHJ1ZSwiaGFzQmF0Ijp0cnVlLCJoYXNDMSI6ZmFsc2UsImhhc0MyIjpmYWxzZSwiaGFzQzMiOmZhbHNlLCJoYXNDNCI6ZmFsc2UsImhhc0JsMSI6dHJ1ZSwiaGFzQmwyIjpmYWxzZSwic29sYXIiOjYwMCwibG9hZCI6ODAwLCJiYXR0ZXJ5IjoxMDAsInNvYyI6NjksImNvbnN1bWVyMSI6MCwiY29uc3VtZXIyIjowLCJjb25zdW1lcjMiOjAsImNvbnN1bWVyNCI6MCwiYmF0dGVyeUxvYWQxIjozMDAsImJhdHRlcnlMb2FkMiI6MCwic3BlZWQiOjEsIm5vZGVTdHlsZSI6ImZpbGxlZCIsIm5vZGVTaGFwZSI6InNxdWFyZSIsImljb25TdHlsZSI6dHJ1ZSwiZG90U2hhcGUiOiJib2x0IiwiY3VydmVCZW5kIjowLCJ0b3BvbG9neSI6eyJzb2xhclRvSG9tZSI6ZmFsc2UsInNvbGFyVG9HcmlkIjpmYWxzZX19"><img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-filled.gif" alt="powerflow — filled node style, square node shape, full-size background icons, lightning-bolt flow dots and sharp 90° corners, a balcony PV setup wired to charge only the battery" height="420" /></a>
 
-<sub><code>tonal</code> — an opaque, muted fill with no ring, plus <a href="#dotshape"><code>dotShape: 'spark'</code></a>.</sub>
+<br /><br />
+
+<a href="https://mihaitom.github.io/power-flow/?s=eyJoYXNTb2xhciI6dHJ1ZSwiaGFzQmF0Ijp0cnVlLCJoYXNDMSI6dHJ1ZSwiaGFzQzIiOnRydWUsImhhc0MzIjpmYWxzZSwiaGFzQzQiOmZhbHNlLCJoYXNCbDEiOmZhbHNlLCJoYXNCbDIiOmZhbHNlLCJzb2xhciI6NjAwMCwibG9hZCI6OTUwMCwiYmF0dGVyeSI6LTE1MDAsInNvYyI6NjksImNvbnN1bWVyMSI6NDAwMCwiY29uc3VtZXIyIjoxNTAwLCJjb25zdW1lcjMiOjAsImNvbnN1bWVyNCI6MCwiYmF0dGVyeUxvYWQxIjowLCJiYXR0ZXJ5TG9hZDIiOjAsInNwZWVkIjoxLCJub2RlU3R5bGUiOiJ0b25hbCIsImRvdFNoYXBlIjoiY2hldnJvbiIsImN1cnZlQmVuZCI6MC4yMDAyMjI0OTk5OTk5OTk5NH0"><img src="https://raw.githubusercontent.com/mihaitom/power-flow/main/docs/preview-tonal.gif" alt="powerflow — tonal node style with chevron flow dots and a nearly sharp-cornered curve" height="420" /></a>
 
 </div>
 
@@ -69,10 +65,16 @@ crisp scalable vectors; no runtime framework dependency.
 - **Battery charge/discharge highlight** — a bright comet spins around the
   battery's state-of-charge ring while charging or discharging, color-coded
   by direction; toggleable via `options.batteryChargeHighlight`.
+- **Pulsing active tracks** — toggle `options.trackPulse` to have every
+  actively-carrying track pulse in brightness, tempo scaled to that flow's
+  own speed.
 - **Themeable** — every node colour (including separate charge/discharge colours
   for battery and grid), every label, and every node icon is overridable.
 - **Four node styles** — soft, tonal, outline or filled, switchable live via
   `options.nodeStyle` (see the examples above).
+- **Three node shapes** — circle, square or hexagon via `options.nodeShape`;
+  circle↔square morphs smoothly, and the coverage/SoC/charge-highlight rings
+  follow whichever shape is active.
 - **Adjustable animation** — dot speed multiplier lets you slow down or speed up
   the flow independently of the power values.
 - **Configurable look** — full-size background icons, five flow-dot shapes
@@ -219,13 +221,15 @@ leak into your app.
 | `topology`   | `Partial<FlowTopology>`  | Enable/disable individual built-in connections. All default `true`. |
 | `speedScale` | `number`                 | Dot speed multiplier. `1` = default, `2` = twice as fast.  |
 | `nodeStyle`  | `'soft' \| 'tonal' \| 'outline' \| 'filled'` | How each node's background/ring/icon/text are painted. Default `'soft'`. |
+| `nodeShape`  | `'circle' \| 'square' \| 'hexagon'` | Shape of every node's own background/ring — the coverage/SoC/charge-highlight rings drawn on top follow suit. Default `'circle'`. Hexagon is a true regular hexagon (equal side lengths), so it's wider than the other two shapes. |
 | `iconStyle`  | `'default' \| 'full'`    | `'full'` draws each icon large behind its value/label text. Default `'default'`. |
 | `dotShape`   | `'circle' \| 'triangle' \| 'bolt' \| 'chevron' \| 'spark'` | Shape of the animated flow dots — `'triangle'`/`'bolt'`/`'chevron'`/`'spark'` all orient themselves along their direction of travel. Default `'circle'`. |
 | `dotCount`   | `number`                 | Number of dots animated per active flow line, evenly spaced along the path. Default `1`. Clamped to `1–8`; the short home↔consumer1/2 and battery↔batteryLoad1/2 connections always cap at 2. |
-| `curveBend`  | `number`                 | Shape of the diagram's curved connections. `0` = straight lines, `1` = the standard curve (default), up to `2.5` = straighter departure/arrival with a sharper turn. |
+| `curveBend`  | `number`                 | Corner *radius* of the diagram's curved connections. `0` = sharp 90° corner, `2.5` (max) = direct straight line, `1` = the standard curve (default). |
 | `rowGap`     | `number`                 | Vertical spacing (px) between the middle row (grid/home) and the top/bottom rows. Default `125`. Clamped to `110–180`. |
 | `columnGap`  | `number`                 | Horizontal spacing (px) between adjacent columns. Default `145`. Clamped to `110–180`. |
 | `batteryChargeHighlight` | `boolean`    | Whether the battery's SoC ring shows an animated highlight while charging/discharging. Default `true`; set `false` for a plain static ring. |
+| `trackPulse` | `boolean`                | Whether an actively-carrying track pulses in brightness on top of its traveling dot(s), tempo scaled to that flow's own speed. Default `false`. |
 
 `options` is set as a whole (`pf.options = { iconStyle: 'full' }`) rather than
 merged automatically — pass along whatever previous fields you want to keep,
@@ -404,6 +408,30 @@ stay legible against whatever accent color that node happens to have.
 > Not currently reproducible in Chrome/Chromium-based browsers. Workaround:
 > use a different `nodeStyle` at large sizes in Firefox/Waterfox.
 
+### `nodeShape`
+
+Shape of every node's own background/ring. Every node keeps the same 104px
+footprint regardless, so track routing/fan-out is unaffected — only the
+outline changes:
+
+```ts
+pf.options = { ...pf.options, nodeShape: 'circle' }; // rounded, the default
+pf.options = { ...pf.options, nodeShape: 'square' }; // sharp corners
+pf.options = { ...pf.options, nodeShape: 'hexagon' }; // regular hexagon
+```
+
+`'circle'`↔`'square'` morph smoothly (an animated corner radius); switching
+to/from `'hexagon'` snaps instantly instead, since it's a separate shape
+rather than a rounded corner. The coverage/SoC/charge-highlight rings drawn
+on top of solar/grid/home/battery always match the selected shape.
+
+`'hexagon'` is a true *regular* hexagon — every side the same length — which
+makes it wider than the circle/square footprint; the diagram's `viewBox`
+widens automatically to keep it from clipping at the edge, and both the
+straight and curved tracks that enter a hexagon node pull back further so
+they don't clip into its slanted sides. See the second and third GIFs at the
+top of this README for `'hexagon'` and `'square'` in action.
+
 ### `iconStyle`
 
 ```ts
@@ -436,18 +464,28 @@ path is too short for more to read as separate dots rather than a blur.
 
 ### `curveBend`
 
-Scales the diagram's curved connections (e.g. solar/battery's fan-out to home
-and grid) by stretching or shrinking how far each curve travels in its fixed
-departure/arrival direction before turning — not by bulging the whole arc
-further from a straight line:
+Behaves like a corner *radius* for the diagram's curved connections (e.g.
+solar/battery's fan-out to home and grid):
 
 ```ts
-pf.options = { ...pf.options, curveBend: 0 }; // straightens every curve into a direct line
-pf.options = { ...pf.options, curveBend: 1 }; // the standard curve (the default)
-pf.options = { ...pf.options, curveBend: 2.5 }; // longer straight run out of/into each node, with a
-// sharper turn in between (the maximum — kept at 2.5 so curves don't cross
-// neighboring nodes)
+pf.options = { ...pf.options, curveBend: 0 }; // sharp, un-rounded 90° corner
+pf.options = { ...pf.options, curveBend: 1 }; // the standard, moderately-rounded curve (the default)
+pf.options = { ...pf.options, curveBend: 2.5 }; // the maximum — a plain direct line, corner gone entirely
 ```
+
+`0` is two straight segments meeting at a point, each running in the
+connection's fixed departure/arrival direction (e.g. "leaves solar straight
+down, arrives at home straight across"). `2.5` is so large a "radius" that
+the corner disappears and the connection becomes a direct line between the
+two nodes. Both ends are the natural limit of the same continuous shape, not
+a special case, so there's no jump anywhere in between — low values round
+the sharp corner into an ever-wider arc, and higher values then flatten that
+same arc smoothly into the final straight line. Clamped to `0–2.5`.
+
+> **Changed in 1.2.0**: `curveBend` used to work the other way around — `0`
+> was a direct line and higher values sharpened the corner. If you set
+> `curveBend` explicitly (to anything other than the default `1`), upgrading
+> will change your diagram's geometry; see the [changelog](./CHANGELOG.md).
 
 ### `rowGap` / `columnGap`
 
@@ -464,6 +502,18 @@ pf.options = { ...pf.options, columnGap: 145 }; // the default
 ```
 
 Both are clamped to `110–180`.
+
+### `trackPulse`
+
+```ts
+pf.options = { ...pf.options, trackPulse: false }; // dots only, no track pulse (the default)
+pf.options = { ...pf.options, trackPulse: true }; // actively-carrying tracks also pulse in brightness
+```
+
+The pulse tempo scales with that flow's own speed, the same way dot speed
+does, so a higher-load flow pulses faster than a lightly-loaded one. See the
+first GIF at the top of this README, which has it enabled across several
+simultaneously active flows at different loads.
 
 ## How the flows are computed
 

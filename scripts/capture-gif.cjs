@@ -9,8 +9,11 @@
  * Options (single-shot mode — used whenever --test is given):
  *   --test <label>        Test case button to click
  *   --node-style <style>  soft | tonal | outline | filled (default: soft)
+ *   --node-shape <shape>   circle | square | hexagon (default: circle, i.e. omit the flag)
  *   --icon-style           Turn on full-size background icons (iconStyle: 'full')
  *   --dot-shape <shape>     circle | triangle | bolt | chevron | spark (default: circle, i.e. omit the flag)
+ *   --track-pulse           Turn on pulsing active tracks (trackPulse: true)
+ *   --curve-bend <n>        Corner radius, 0 (sharp corner) .. 2.5 (straight line); default: 1 (untouched)
  *   --duration <s>          Recording duration in seconds (default: 3)
  *   --fps <n>                Output GIF framerate (default: 30)
  *   --out <path>             Output file (default: docs/preview.gif)
@@ -48,39 +51,45 @@ const get = (flag, def) => {
 };
 const has = (flag) => args.includes(flag);
 
-// The GIFs referenced from the README. Each pairs a test case with a
-// nodeStyle (all four appear once across the set) so it demonstrates both
-// the data-driven layout (the 4th column only appears when a test case
-// actually uses consumer3/consumer4) and the nodeStyle looks side by side —
-// not just the same look three times with different numbers. The hero shot
-// (preview.gif, top of the README) deliberately stays at every default
-// (including dotShape: 'circle') so it honestly represents the
-// out-of-the-box look; the other three each get one of the three newer
-// non-default dotShapes (bolt/chevron/spark — triangle, the original
-// alternate shape, is left to its own documented code example rather than
-// a fourth GIF), so the README's "four looks" showcase doubles as a
-// dotShape showcase too. The filled shot additionally turns on
-// iconStyle: 'full', the one appearance knob the other three don't
-// otherwise exercise.
+// The GIFs referenced from the README — deliberately just a handful, each
+// stacking as many *different* settings together as possible, rather than
+// one GIF per option (a README is not a gallery). The hero shot
+// (preview.gif, top of the README) is the one exception: it stays at every
+// default (nodeStyle/nodeShape/dotShape all default, trackPulse off,
+// curveBend untouched) so it honestly represents the out-of-the-box look.
+// Each of the other three combines a distinct nodeStyle + nodeShape +
+// dotShape + curveBend (covering all three nodeShapes and both curveBend
+// extremes plus a middle value across the full set), and each also turns on
+// exactly one of iconStyle/trackPulse — so across the set, every appearance
+// knob gets exercised at least once, on top of three different test
+// cases/topologies (a 4-column layout with trackPulse, the balcony-PV
+// topology with a battery SoC ring, and a 3-column layout).
 const SHOTS = [
   { test: 'Solar day', nodeStyle: 'soft', out: 'docs/preview.gif' },
   {
     test: 'All four consumers + battery-fed loads',
     nodeStyle: 'outline',
-    dotShape: 'chevron',
+    nodeShape: 'hexagon',
+    dotShape: 'spark',
+    trackPulse: true,
+    curveBend: 2.5,
     out: 'docs/preview-outline.gif',
   },
   {
     test: 'Balcony PV + battery-fed load',
     nodeStyle: 'filled',
+    nodeShape: 'square',
     iconStyle: true,
     dotShape: 'bolt',
+    curveBend: 0,
     out: 'docs/preview-filled.gif',
   },
   {
     test: 'Consumers + battery, midday',
     nodeStyle: 'tonal',
-    dotShape: 'spark',
+    dotShape: 'chevron',
+    nodeShape: 'circle',
+    curveBend: 0.2, // a third, distinct point between the two extremes above
     out: 'docs/preview-tonal.gif',
   },
 ];
@@ -91,8 +100,11 @@ const shots = cliTest
       {
         test: cliTest,
         nodeStyle: get('--node-style', 'soft'),
+        nodeShape: get('--node-shape', null),
         iconStyle: has('--icon-style'),
         dotShape: get('--dot-shape', null),
+        trackPulse: has('--track-pulse'),
+        curveBend: get('--curve-bend', null),
         out: get('--out', 'docs/preview.gif'),
       },
     ]
@@ -129,7 +141,10 @@ const server = spawn(
 execSync('sleep 0.5');
 
 // ── Step 3: capture one shot via CDP screencast ───────────────────────────────
-async function captureShot(browser, { test, nodeStyle, iconStyle, dotShape, out }) {
+async function captureShot(
+  browser,
+  { test, nodeStyle, nodeShape, iconStyle, dotShape, trackPulse, curveBend, out },
+) {
   const outFile = path.resolve(ROOT, out);
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   fs.rmSync(FRAMES, { recursive: true, force: true });
@@ -186,28 +201,48 @@ async function captureShot(browser, { test, nodeStyle, iconStyle, dotShape, out 
     );
   }
 
-  // Apply the requested nodeStyle
-  const styled = await page.evaluate((style) => {
-    const btn = document.querySelector(`[data-node-style="${style}"]`);
-    if (btn) {
-      btn.click();
-      return true;
+  // Apply the requested nodeStyle (defaults to 'soft', already the on-load state)
+  if (nodeStyle) {
+    const styled = await page.evaluate((style) => {
+      const btn = document.querySelector(`[data-node-style="${style}"]`);
+      if (btn) {
+        btn.click();
+        return true;
+      }
+      return false;
+    }, nodeStyle);
+    if (!styled) {
+      throw new Error(
+        `nodeStyle "${nodeStyle}" not found (expected soft/tonal/outline/filled)`,
+      );
     }
-    return false;
-  }, nodeStyle);
-  if (!styled) {
-    throw new Error(
-      `nodeStyle "${nodeStyle}" not found (expected soft/tonal/outline/filled)`,
-    );
   }
 
-  // Optionally also switch on full-size background icons and/or a non-
-  // default dot shape. Uses a synthetic DOM click (like the test-case and
-  // nodeStyle clicks above) rather than page.click() — puppeteer's real
-  // click requires the element to be visible/hit-testable, but these
-  // controls live in the sidebar `.card`, which the style tag above hides.
+  // Optionally also switch on full-size background icons, a non-circle node
+  // shape, trackPulse and/or a non-default dot shape. Uses a synthetic DOM
+  // click (like the test-case and nodeStyle clicks above) rather than
+  // page.click() — puppeteer's real click requires the element to be
+  // visible/hit-testable, but these controls live in the sidebar `.card`,
+  // which the style tag above hides.
   if (iconStyle)
     await page.evaluate(() => document.getElementById('icon-style-full').click());
+  if (nodeShape) {
+    const shaped = await page.evaluate((shape) => {
+      const btn = document.querySelector(`[data-node-shape="${shape}"]`);
+      if (btn) {
+        btn.click();
+        return true;
+      }
+      return false;
+    }, nodeShape);
+    if (!shaped) {
+      throw new Error(
+        `nodeShape "${nodeShape}" not found (expected circle/square/hexagon)`,
+      );
+    }
+  }
+  if (trackPulse)
+    await page.evaluate(() => document.getElementById('track-pulse').click());
   if (dotShape) {
     const shaped = await page.evaluate((shape) => {
       const btn = document.querySelector(`[data-dot-shape="${shape}"]`);
@@ -223,6 +258,34 @@ async function captureShot(browser, { test, nodeStyle, iconStyle, dotShape, out 
       );
     }
   }
+  if (curveBend != null) {
+    // The #curve-bend <input> is a plain 0..1 slider position, not curveBend
+    // itself — see curveBendToSlider()/sliderToCurveBend() in
+    // playground-state.ts for the (quadratic, "logarithmic-feeling")
+    // mapping this replicates. Setting .value alone doesn't run the
+    // playground's own 'input' listener, so dispatch one to actually apply it.
+    await page.evaluate((bend) => {
+      const CURVE_BEND_MAX = 2.5;
+      const CURVE_BEND_SLIDER_EXPONENT = 2;
+      const pos = Math.pow(bend / CURVE_BEND_MAX, 1 / CURVE_BEND_SLIDER_EXPONENT);
+      const inp = document.getElementById('curve-bend');
+      inp.value = String(pos);
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    }, Number(curveBend));
+  }
+
+  // Every control click/input above triggers the playground's own syncUrl()
+  // (see playground-share.ts), which already encodes the full state
+  // (test-case data + every non-default option) into `?s=...` on
+  // history.replaceState — so location.href here already *is* the shareable
+  // link for this exact shot. Just swap the local dev-server origin for the
+  // real published playground's.
+  const playgroundUrl = await page.evaluate(() =>
+    location.href.replace(
+      /^https?:\/\/[^/]+\/power-flow\//,
+      'https://mihaitom.github.io/power-flow/',
+    ),
+  );
 
   // The diagram's own aspect ratio (400 or 545 wide, per the viewBox sizing
   // in core.ts's update()) depends on which optional nodes the test case
@@ -270,7 +333,7 @@ async function captureShot(browser, { test, nodeStyle, iconStyle, dotShape, out 
   });
 
   process.stdout.write(
-    `Recording "${test}" (${nodeStyle}${dotShape ? `, ${dotShape} dots` : ''}, ${width}×${height}) for ${DURATION_S}s…`,
+    `Recording "${test}" (${nodeStyle || 'soft'}${nodeShape ? `, ${nodeShape}` : ''}${dotShape ? `, ${dotShape} dots` : ''}${trackPulse ? ', trackPulse' : ''}${curveBend != null ? `, curveBend=${curveBend}` : ''}, ${width}×${height}) for ${DURATION_S}s…`,
   );
   await new Promise((r) => setTimeout(r, DURATION_S * 1000));
   await client.send('Page.stopScreencast');
@@ -323,8 +386,10 @@ async function captureShot(browser, { test, nodeStyle, iconStyle, dotShape, out 
 
   const kb = (fs.statSync(outFile).size / 1024).toFixed(0);
   console.log(`  → ${out} (${kb} kB)`);
+  console.log(`    ${playgroundUrl}`);
 
   await page.close();
+  return playgroundUrl;
 }
 
 // A fresh browser process per shot rather than one shared across the whole
@@ -346,7 +411,7 @@ async function captureShotInOwnBrowser(shot) {
     headless: true,
   });
   try {
-    await captureShot(browser, shot);
+    return await captureShot(browser, shot);
   } finally {
     await browser.close();
   }
