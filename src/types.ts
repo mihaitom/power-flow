@@ -110,6 +110,17 @@ export interface FlowIcons {
  *    switched to a uniform white with a drop shadow for contrast. */
 export type NodeStyle = 'soft' | 'tonal' | 'outline' | 'filled';
 
+/** Shape of every node's own background/ring — `'circle'` (default, the
+ *  original look), `'square'` (sharp corners), or `'hexagon'`. Every node
+ *  keeps the same 104px footprint either way, so track routing/fan-out is
+ *  unaffected. `'circle'`<->`'square'` morphs smoothly (both are the same
+ *  element with an animated corner radius); transitioning to/from
+ *  `'hexagon'` snaps instantly instead (a different clipping mechanism —
+ *  see applyNodeShape() in core.ts). The coverage/SoC progress rings drawn
+ *  on top of solar/grid/home/battery follow `'circle'`/`'square'` but stay
+ *  circular for `'hexagon'`. */
+export type NodeShape = 'circle' | 'square' | 'hexagon';
+
 /** Shape of the animated flow dots — see `PowerFlowSettings.dotShape`. */
 export type DotShape = 'circle' | 'triangle' | 'bolt' | 'chevron' | 'spark';
 
@@ -125,6 +136,11 @@ export interface PowerFlowSettings {
   speedScale: number;
   /** How each node's background/ring/icon/text are painted. Default `'soft'`. */
   nodeStyle: NodeStyle;
+  /** Shape of every node's own background/ring. `'circle'` (default) is the
+   *  original look; `'square'` gives every node sharp corners instead.
+   *  Every node keeps the same 104px footprint either way, so track
+   *  routing/fan-out is unaffected — only the corner radius changes. */
+  nodeShape: NodeShape;
   /** `'full'` draws each node's icon large behind the value/label text
    *  (dimmed, as a background) instead of small above it. Default `'default'`. */
   iconStyle: 'default' | 'full';
@@ -144,12 +160,18 @@ export interface PowerFlowSettings {
    *  cap at 2 regardless of this value — their path is too short for more
    *  dots to read as distinct. */
   dotCount: number;
-  /** Scales the diagram's curved connections by stretching/shrinking how far
-   *  each one travels in its fixed departure/arrival direction before
-   *  turning. `0` collapses them into direct lines, `1` (the default) is
-   *  the standard curve, values above `1` hold the straight direction longer
-   *  with a sharper turn in between. Clamped to `0–2.5` internally to keep
-   *  curves from crossing neighboring nodes. */
+  /** Shape of the diagram's curved connections, behaving like a corner
+   *  *radius*. `0` is a sharp, un-rounded 90° corner — two straight
+   *  segments meeting at a point, each running in the connection's fixed
+   *  departure/arrival direction (e.g. "leaves solar straight down, arrives
+   *  at home straight across"). `2.5` (the max) is a plain direct line
+   *  between the two nodes — so large a "radius" the corner disappears
+   *  entirely. Both ends are the natural limit of the same continuous
+   *  shape, not a special case, so there's no jump anywhere in between:
+   *  low values round the sharp corner into an ever-wider arc, and higher
+   *  values then flatten that same arc smoothly into the final straight
+   *  line. `1` is a reasonable, moderately-rounded default. Clamped to
+   *  `0–2.5` internally. */
   curveBend: number;
   /** Vertical center-to-center distance (in px) between the middle row
    *  (grid/home) and the top/bottom rows (solar/consumer1/consumer3 and
@@ -171,6 +193,11 @@ export interface PowerFlowSettings {
    *  charging/discharging. Default `true`. Set `false` for a plain static
    *  ring with no motion. */
   batteryChargeHighlight: boolean;
+  /** Whether an actively-carrying track pulses in brightness on top of its
+   *  traveling dot(s), tempo scaled to that flow's own speed (so a
+   *  higher-load flow pulses faster). Default `false` — the original,
+   *  always-shipped look (dots only, no track pulse). */
+  trackPulse: boolean;
 }
 
 export interface PowerFlowOptions {

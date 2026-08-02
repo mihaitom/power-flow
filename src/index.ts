@@ -10,6 +10,7 @@ export type {
   PowerFlowOptions,
   PowerFlowSettings,
   NodeStyle,
+  NodeShape,
   DotShape,
 } from './types';
 export { PowerFlowElement, definePowerFlow } from './element';

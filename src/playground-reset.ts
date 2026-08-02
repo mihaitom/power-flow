@@ -22,10 +22,12 @@ import {
   updateLoadMin,
   updateGrid,
   setNodeStyle,
+  setNodeShape,
   setDotShape,
   speedInp,
   iconStyleInp,
   batteryChargeHighlightInp,
+  trackPulseInp,
   curveBendInp,
   dotCountInp,
   rowGapInp,
@@ -71,9 +73,11 @@ function resetCheckbox(input: HTMLInputElement) {
   // Speed and appearance — reuse each control's own listener.
   resetInput(speedInp);
   setNodeStyle('soft');
+  setNodeShape('circle');
   resetCheckbox(iconStyleInp);
   setDotShape('circle');
   resetCheckbox(batteryChargeHighlightInp);
+  resetCheckbox(trackPulseInp);
   resetInput(curveBendInp);
   resetInput(dotCountInp);
   resetInput(rowGapInp);

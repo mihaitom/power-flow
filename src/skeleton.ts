@@ -9,21 +9,96 @@ import {
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 
+// Used by every regular-hexagon vertex calculation below (node hexagon and
+// ring hexagon alike) — a regular polygon's side/circumradius/apothem
+// relationships all involve it, so it's shared once here rather than
+// recomputed per call site.
+const SQRT3 = Math.sqrt(3);
+
 // Circumference of the r=47 coverage/SoC/charge-highlight rings (home/grid
 // coverage arcs, battery SoC arc, battery charge-highlight comet) — shared
 // so core.ts doesn't hardcode its own copy of 2·π·47.
 export const ARC_LENGTH = 2 * Math.PI * 47; // ≈ 295.31
 
+// Every coverage/SoC/comet ring — home/grid coverage arcs, battery SoC arc,
+// its mask, and the charge/discharge comet layers — has three pre-rendered
+// variants (only one visible at a time, toggled by core.ts's
+// applyRingShape() based on `options.nodeShape`, the same `display`-swap
+// pattern node bg/ring's hexagon variant already uses):
+//
+//  - circle (id, no suffix): the original <rect rx=ry=47> (94×94) — kept
+//    exactly as-is, verified pixel-identical to the pre-nodeShape circle
+//    ring it replaced.
+//  - square (id + "-square"): a <polygon>, NOT another rx/ry state of the
+//    same rect — a sharp-cornered rect's own implicit path start point
+//    (wherever a browser's SVG implementation puts it for rx=ry=0) turned
+//    out not to line up with the circle ring's carefully-calibrated
+//    12-o'clock start (see squareRingPoints() below for the actual fix:
+//    an explicit vertex placed exactly at top-center).
+//  - hexagon (id + "-hex"): a <polygon> via hexagonRingPoints() above, for
+//    the same reason.
+//
+// Every variant's own perimeter (needed for stroke-dasharray/-dashoffset
+// math — see RING_PERIMETER_SQUARE/_HEX below and applyRingShape() in
+// core.ts) differs: ARC_LENGTH (2·π·47) for circle — a fully-rounded rect's
+// straight edges vanish, leaving four quarter-circles that together are one
+// full circle of the same radius — plain 4×side for square, 6×side for a
+// regular hexagon (whose side length equals its own circumradius).
+export const RING_SIZE = 94;
+export const RING_PERIMETER_SQUARE = 4 * RING_SIZE;
+const RING_HEX_APOTHEM = 47;
+const RING_HEX_CIRCUMRADIUS = (2 * RING_HEX_APOTHEM) / SQRT3;
+export const RING_PERIMETER_HEX = 6 * RING_HEX_CIRCUMRADIUS;
+
+// None of these three set an initial `display` — some callers' own
+// `extraAttrs` already carry a `style="..."` (e.g. the comet layers'
+// opacity/blur), and a second `style` attribute here would silently lose
+// to the first one under HTML parsing's duplicate-attribute rule rather
+// than merge with it. core.ts's applyRingShape() sets every variant's
+// `display` explicitly instead, synchronously within the constructor
+// before the first paint, so there's no flash of the wrong shape either.
+function ringRect(cx: number, cy: number, id: string, extraAttrs: string): string {
+  return `<rect id="${id}" x="${cx - 47}" y="${cy - 47}" width="${RING_SIZE}" height="${RING_SIZE}" rx="47" ry="47" transform="rotate(-90 ${cx} ${cy})" ${extraAttrs} />`;
+}
+
+// A square ring, split at its top edge's midpoint and reordered to start
+// there — see the "square" bullet above for why (mirrors
+// hexagonRingPoints()'s own fix).
+export function squareRingPoints(cx: number, cy: number, half = 47): string {
+  return [
+    [0, -half],
+    [half, -half],
+    [half, half],
+    [-half, half],
+    [-half, -half],
+  ]
+    .map(([dx, dy]) => `${cx + dx},${cy + dy}`)
+    .join(' ');
+}
+
+function ringSquarePolygon(cx: number, cy: number, id: string, extraAttrs: string): string {
+  return `<polygon id="${id}" points="${squareRingPoints(cx, cy)}" ${extraAttrs} />`;
+}
+
+function ringHexPolygon(cx: number, cy: number, id: string, extraAttrs: string): string {
+  return `<polygon id="${id}" points="${hexagonRingPoints(cx, cy, RING_HEX_APOTHEM)}" ${extraAttrs} />`;
+}
+
 // Angular length of the comet head's dash, converted to the px length
 // stroke-dasharray needs — short relative to ARC_LENGTH so the comet reads
 // as a localized highlight, not a second progress arc. Baked into each
-// band's stroke-dasharray directly in the markup since it's a constant —
-// only stroke-dashoffset changes at runtime, and it's driven from core.ts's
-// own animation loop rather than a CSS animation (see BATTERY_COMET_LAYERS
-// below for why).
-const BAT_COMET_HEAD_DEG = 5;
-const BAT_COMET_DASH = (ARC_LENGTH * BAT_COMET_HEAD_DEG) / 360;
-const BAT_COMET_DASHARRAY = `${BAT_COMET_DASH} ${ARC_LENGTH - BAT_COMET_DASH}`;
+// band's stroke-dasharray directly in the markup for the (default) circle
+// ring's own perimeter; core.ts's applyRingShape() recomputes it against
+// the square perimeter instead when `options.nodeShape === 'square'`,
+// reusing this same fraction (exported so that recompute doesn't need a
+// second copy of "5°" hardcoded) — the comet's dashoffset animation
+// (core.ts's tick()) is otherwise unaffected either way.
+export const BAT_COMET_HEAD_FRACTION = 5 / 360;
+function cometDasharray(perimeter: number): string {
+  const dash = perimeter * BAT_COMET_HEAD_FRACTION;
+  return `${dash} ${perimeter - dash}`;
+}
+const BAT_COMET_DASHARRAY = cometDasharray(ARC_LENGTH);
 const BAT_COMET_TAIL_SEGMENTS = 5;
 const BAT_COMET_TAIL_STEP_DEG = 2.2; // successive bands are 2.2° further behind the head
 
@@ -59,8 +134,20 @@ export const BATTERY_COMET_LAYERS: { id: string; delay: number }[] = [
 // head and disappears quickly toward its faint end, closer to how a real
 // glow actually falls off than a straight ramp would look.
 function batteryCometMarkup(cx: number, cy: number): string {
+  // Same three-shape-variant pattern as ringRect()/ringSquarePolygon()/
+  // ringHexPolygon() above (reused directly here for identical positioning
+  // math) — each comet layer needs all three so it can follow
+  // `options.nodeShape` right along with the SoC ring it's masked to. Every
+  // shape's own stroke-dasharray is baked in per its own perimeter (see
+  // cometDasharray()) since — unlike stroke-dashoffset, refreshed every
+  // tick() frame regardless — dasharray is otherwise never touched again
+  // after construction.
   const arc = (id: string, extraAttrs: string) =>
-    `<circle id="${id}" cx="${cx}" cy="${cy}" r="47" stroke-dasharray="${BAT_COMET_DASHARRAY}" transform="rotate(-90 ${cx} ${cy})" ${extraAttrs} />`;
+    [
+      ringRect(cx, cy, id, `stroke-dasharray="${BAT_COMET_DASHARRAY}" ${extraAttrs}`),
+      ringSquarePolygon(cx, cy, `${id}-square`, `stroke-dasharray="${cometDasharray(RING_PERIMETER_SQUARE)}" ${extraAttrs}`),
+      ringHexPolygon(cx, cy, `${id}-hex`, `stroke-dasharray="${cometDasharray(RING_PERIMETER_HEX)}" ${extraAttrs}`),
+    ].join('\n      ');
 
   const tail = BATTERY_COMET_LAYERS.filter((l) => l.delay > 0)
     .map(({ id }, i) => {
@@ -290,53 +377,67 @@ export function trackIdFor(pathId: string): string {
 // as the diagram is stretched, instead of a fixed-length handle shrinking
 // to a sliver of the total travel (and the curve reverting to one plain
 // bulging arc, barely responding to curveBend) at larger gaps.
+// The home/grid-side pull-back (51, "short of the node's edge" — see this
+// function's own comment) assumes a node whose boundary sits at a uniform
+// 52px in every direction — true for circle/square, but not for a regular
+// hexagon: at the ±12 fan-out offset this leg arrives/departs at, a
+// hexagon's actual (slanted) edge sits further out, at (2×52 - 12)/√3 ≈
+// 53.12 rather than 52 — see hexagonVertexOffsets()'s own geometry (the
+// same edge interpolation, solved for x at a given y). Using the
+// circle/square value there instead would land the curve's own endpoint
+// *inside* the wider hexagon, clipping into it. Exported as a named
+// constant (rather than inlined into HEX_PULLBACK below) so the derivation
+// stays legible.
+export const HEX_HOME_PULLBACK = (2 * 52 - 12) / SQRT3;
+
 export function curvesForLayout(
   rowGap: number,
   columnGap: number,
+  homePullback = 51,
 ): { id: string; p0: [number, number]; p1: [number, number]; p2: [number, number]; p3: [number, number] }[] {
   const { topInner, botInner } = rowLayout(rowGap);
   const { col1, col2, col3, col4 } = columnLayout(columnGap);
   const vHandle = (38 * rowGap) / DEFAULT_ROW_GAP;
-  const hHandle = 51 + (38 * columnGap) / DEFAULT_COLUMN_GAP;
+  const hHandle = homePullback + (38 * columnGap) / DEFAULT_COLUMN_GAP;
   return [
     {
       id: 'p-solar-home',
       p0: [col2 + 12, topInner],
       p1: [col2 + 12, topInner + vHandle],
       p2: [col3 - hHandle, 173],
-      p3: [col3 - 51, 173],
+      p3: [col3 - homePullback, 173],
     },
     {
       id: 'p-solar-grid',
       p0: [col2 - 12, topInner],
       p1: [col2 - 12, topInner + vHandle],
       p2: [col1 + hHandle, 173],
-      p3: [col1 + 51, 173],
+      p3: [col1 + homePullback, 173],
     },
     {
       id: 'p-bat-home',
       p0: [col2 + 12, botInner],
       p1: [col2 + 12, botInner - vHandle],
       p2: [col3 - hHandle, 197],
-      p3: [col3 - 51, 197],
+      p3: [col3 - homePullback, 197],
     },
     {
       id: 'p-bat-grid',
       p0: [col2 - 12, botInner],
       p1: [col2 - 12, botInner - vHandle],
       p2: [col1 + hHandle, 197],
-      p3: [col1 + 51, 197],
+      p3: [col1 + homePullback, 197],
     },
     {
       id: 'p-home-consumer4',
-      p0: [col3 + 51, 197],
+      p0: [col3 + homePullback, 197],
       p1: [col3 + hHandle, 197],
       p2: [col4 - 12, botInner - vHandle],
       p3: [col4 - 12, botInner],
     },
     {
       id: 'p-home-consumer3',
-      p0: [col3 + 51, 173],
+      p0: [col3 + homePullback, 173],
       p1: [col3 + hHandle, 173],
       p2: [col4 - 12, topInner + vHandle],
       p3: [col4 - 12, topInner],
@@ -364,6 +465,28 @@ export const CSS = `
 .track.active {
   stroke: var(--track-color, currentColor);
   opacity: 0.5;
+}
+/* options.trackPulse (default off — see PowerFlowSettings): a gentle
+   brightness breathing on top of the traveling dot(s), purely a filter
+   animation so it layers on top of .track.active's own stroke/opacity
+   without fighting over the same properties. animation-duration is set
+   per-track in JS (the "Track coloring" pass in core.ts's update()),
+   scaled from that track's own flow speed — never here, since a single
+   fixed duration couldn't reflect each leg's own load. */
+.track-pulse .track.active {
+  animation: pf-track-pulse 1.2s ease-in-out infinite;
+}
+@keyframes pf-track-pulse {
+  0%, 100% {
+    opacity: 0.5;
+    stroke-width: 1;
+    filter: brightness(1) drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    opacity: 0.75;
+    stroke-width: 1.1;
+    filter: brightness(1.0) drop-shadow(0 0 2px var(--track-color, currentColor));
+  }
 }
 
 .dot {
@@ -408,8 +531,12 @@ export const CSS = `
 }
 
 .node { transition: opacity 0.35s ease; }
-.node-bg { stroke: none; transition: fill 0.35s ease; }
-.node-ring { fill: none; stroke-width: 2.5; transition: stroke 0.35s ease; }
+/* rx/ry are what actually switch a node's shape (see nodeShapeRect() above
+   and applyNodeShape() in core.ts) — animated the same way fill/stroke
+   already are, so toggling options.nodeShape morphs circle<->square rather
+   than snapping. */
+.node-bg { stroke: none; transition: fill 0.35s ease, rx 0.35s ease, ry 0.35s ease; }
+.node-ring { fill: none; stroke-width: 2.5; transition: stroke 0.35s ease, rx 0.35s ease, ry 0.35s ease; }
 .node-icon { transition: fill 0.35s ease; }
 /* iconStyle: 'full' — the icon fills most of the node as a dimmed background
    so the value/label text stays legible on top. */
@@ -538,6 +665,93 @@ const [cSolarHome, cSolarGrid, cBatHome, cBatGrid, cHomeConsumer4, cHomeConsumer
   DEFAULT_COLUMN_GAP,
 );
 
+// Every node's background/ring is a <rect> whose corner radius doubles as
+// the node-shape switch: rx=ry=52 (half its own 104 width/height) reads as
+// a perfect circle — the original, always-shipped look — rx=ry=0 as a sharp
+// square, anything between as a rounded square. `applyNodeShape()` in
+// core.ts is the only thing that ever changes rx/ry after construction (see
+// `options.nodeShape`); kept as one shared helper here so every node's
+// markup is generated identically rather than each hand-writing its own
+// bg/ring pair.
+function nodeShapeRect(cx: number, cy: number, cls: string, id: string): string {
+  return `<rect x="${cx - 52}" y="${cy - 52}" width="104" height="104" rx="52" ry="52" class="${cls}" id="${id}" />`;
+}
+
+// A flat-top hexagon — a separate pre-rendered <polygon> (hidden via
+// `display` unless `options.nodeShape === 'hexagon'`, see applyNodeShape()
+// in core.ts) rather than another rx/ry state of nodeShapeRect() above:
+// clip-path (which is how a hexagon could in principle be cut from that
+// same rect) clips the *rendered* stroke rather than re-routing it, so a
+// stroked rect clipped to a hexagon comes out as disconnected fragments,
+// not a clean hexagonal outline — a real `<polygon>` strokes correctly
+// along its own hexagonal path, the same way the rect strokes correctly
+// along its own (rounded) square path.
+//
+// A *regular* hexagon (equal side lengths, the shape actually being asked
+// for) can't fit a 104×104 square bounding box the way circle/square do —
+// height (top edge to bottom edge) and width (vertex to vertex) aren't
+// equal for a regular flat-top hexagon, they're related by height =
+// width × √3/2. Rather than distort it to fit the same box (reads as
+// squashed, not hexagonal), height is kept at 104 — apothem 52, matching
+// every other shape's own r/half-size — and width is allowed to grow
+// wider instead (~120px), per `NodeShape`'s own doc comment.
+
+// The six vertex offsets (dx, dy from center) of a regular flat-top hexagon
+// with the given apothem (perpendicular center-to-edge distance — the
+// node's own shapes use 52, matching circle/square's r/half-size; the ring
+// shapes below use 47, matching the circle ring's r=47).
+function hexagonVertexOffsets(apothem: number): [number, number][] {
+  const circumradius = (2 * apothem) / SQRT3; // == each side's own length, for a regular hexagon
+  const half = circumradius / 2;
+  return [
+    [-half, -apothem],
+    [half, -apothem],
+    [circumradius, 0],
+    [half, apothem],
+    [-half, apothem],
+    [-circumradius, 0],
+  ];
+}
+
+// A hexagon node's own vertex-to-vertex half-width (apothem 52, same as
+// every other node shape's own r/half-size) — wider than the 52px every
+// other shape pulls back from center, since a regular hexagon can't have
+// equal-length sides within a 104px-wide box (see NodeShape's own doc
+// comment). Exported so core.ts's viewBox computation can widen itself by
+// the difference when `nodeShape === 'hexagon'`, so the wider hexagons
+// don't get clipped at the diagram's own left/right edges.
+export const NODE_HEX_CIRCUMRADIUS = (2 * 52) / SQRT3;
+
+// Exported so core.ts's applyLayout() can recompute the same vertices when
+// rowGap/columnGap move a node, without duplicating this shape's geometry a
+// second time.
+export function hexagonPoints(cx: number, cy: number, apothem = 52): string {
+  return hexagonVertexOffsets(apothem)
+    .map(([dx, dy]) => `${cx + dx},${cy + dy}`)
+    .join(' ');
+}
+
+// Same six vertices as hexagonPoints(), but split at the top edge's
+// midpoint and reordered to start (and implicitly close) there, so the
+// resulting <polygon>'s own native path start is exactly at "12 o'clock"
+// (top-center) — the coverage/SoC/comet rings (ringHexagon() below) need
+// this so their stroke-dasharray-driven progress (see arc()/
+// applyBatteryHighlight() in core.ts) starts in the same visual place
+// regardless of `nodeShape`, without reverse-engineering wherever a plain
+// <rect>'s own implicit path start happens to fall (see squareRingPoints()
+// for the same fix applied to the square ring).
+export function hexagonRingPoints(cx: number, cy: number, apothem = 47): string {
+  const [topLeft, topRight, right, botRight, botLeft, left] = hexagonVertexOffsets(apothem);
+  const topCenter: [number, number] = [0, -apothem];
+  return [topCenter, topRight, right, botRight, botLeft, left, topLeft]
+    .map(([dx, dy]) => `${cx + dx},${cy + dy}`)
+    .join(' ');
+}
+
+function nodeShapeHexagon(cx: number, cy: number, cls: string, id: string): string {
+  return `<polygon points="${hexagonPoints(cx, cy)}" class="${cls}" id="${id}" style="display: none" />`;
+}
+
 // Static SVG skeleton. Every node, track and dot is present from the start;
 // topology (battery/consumer1) is toggled via `display`, so path lengths only
 // have to be measured once and SMIL animations never restart on toggle.
@@ -600,7 +814,9 @@ export const SKELETON = `
          soft fade rather than a hard edge slicing through the comet's own
          blur whenever it passes near either end of the charged arc. -->
     <mask id="bat-soc-mask" maskUnits="userSpaceOnUse">
-      <circle id="bat-soc-mask-arc" cx="${C.col2}" cy="${L.botY}" r="47" fill="none" stroke="#fff" stroke-width="34" style="filter: blur(7px)" transform="rotate(-90 ${C.col2} ${L.botY})" />
+      ${ringRect(C.col2, L.botY, 'bat-soc-mask-arc', 'fill="none" stroke="#fff" stroke-width="34" style="filter: blur(7px)"')}
+      ${ringSquarePolygon(C.col2, L.botY, 'bat-soc-mask-arc-square', 'fill="none" stroke="#fff" stroke-width="34" style="filter: blur(7px)"')}
+      ${ringHexPolygon(C.col2, L.botY, 'bat-soc-mask-arc-hex', 'fill="none" stroke="#fff" stroke-width="34" style="filter: blur(7px)"')}
     </mask>
   </defs>
 
@@ -626,8 +842,10 @@ export const SKELETON = `
 
   <!-- ── Solar (top, optional) ── -->
   <g id="n-solar" class="node" data-topo="solar">
-    <circle cx="${C.col2}" cy="${L.topY}" r="52" class="node-bg" id="solar-bg" />
-    <circle cx="${C.col2}" cy="${L.topY}" r="52" class="node-ring" id="solar-ring" />
+    ${nodeShapeRect(C.col2, L.topY, 'node-bg', 'solar-bg')}
+    ${nodeShapeHexagon(C.col2, L.topY, 'node-bg', 'solar-bg-hex')}
+    ${nodeShapeRect(C.col2, L.topY, 'node-ring', 'solar-ring')}
+    ${nodeShapeHexagon(C.col2, L.topY, 'node-ring', 'solar-ring-hex')}
     <path id="solar-icon" class="node-icon" transform="${iconTransform(C.col2, L.topY - 18, 28)}" d="${mdiSolarPowerVariant}" />
     <text x="${C.col2}" y="${L.topY + 16}" class="val-text" id="t-solar-val"></text>
     <text x="${C.col2}" y="${L.topY + 29}" class="lbl-text" id="t-solar-lbl"></text>
@@ -635,8 +853,10 @@ export const SKELETON = `
 
   <!-- ── Grid (left) ── -->
   <g class="node">
-    <circle cx="${C.col1}" cy="${MID_ROW_Y}" r="52" class="node-bg" id="grid-bg" />
-    <circle cx="${C.col1}" cy="${MID_ROW_Y}" r="52" class="node-ring" id="grid-ring" />
+    ${nodeShapeRect(C.col1, MID_ROW_Y, 'node-bg', 'grid-bg')}
+    ${nodeShapeHexagon(C.col1, MID_ROW_Y, 'node-bg', 'grid-bg-hex')}
+    ${nodeShapeRect(C.col1, MID_ROW_Y, 'node-ring', 'grid-ring')}
+    ${nodeShapeHexagon(C.col1, MID_ROW_Y, 'node-ring', 'grid-ring-hex')}
     <path id="grid-icon" class="node-icon" transform="${iconTransform(C.col1, MID_ROW_Y - 18, 28)}" d="${mdiTransmissionTower}" />
     <text x="${C.col1}" y="${MID_ROW_Y + 16}" class="val-text val-text-accent" id="t-grid-val"></text>
     <text x="${C.col1}" y="${MID_ROW_Y + 29}" class="lbl-text" id="t-grid-lbl"></text>
@@ -644,8 +864,10 @@ export const SKELETON = `
 
   <!-- ── Home (right) ── -->
   <g class="node">
-    <circle cx="${C.col3}" cy="${MID_ROW_Y}" r="52" class="node-bg" id="home-bg" />
-    <circle cx="${C.col3}" cy="${MID_ROW_Y}" r="52" class="node-ring" id="home-ring" />
+    ${nodeShapeRect(C.col3, MID_ROW_Y, 'node-bg', 'home-bg')}
+    ${nodeShapeHexagon(C.col3, MID_ROW_Y, 'node-bg', 'home-bg-hex')}
+    ${nodeShapeRect(C.col3, MID_ROW_Y, 'node-ring', 'home-ring')}
+    ${nodeShapeHexagon(C.col3, MID_ROW_Y, 'node-ring', 'home-ring-hex')}
     <path id="home-icon" class="node-icon" transform="${iconTransform(C.col3, MID_ROW_Y - 18, 28)}" d="${mdiHome}" />
     <text x="${C.col3}" y="${MID_ROW_Y + 16}" class="val-text" id="t-home-val"></text>
     <text x="${C.col3}" y="${MID_ROW_Y + 29}" class="lbl-text" id="t-home-lbl"></text>
@@ -662,17 +884,29 @@ export const SKELETON = `
        the grid-side rings (garc-*) move with columnGap — home's column is
        fixed, so arc-*'s never need repositioning. -->
   <g>
-    <circle id="arc-solar" cx="${C.col3}" cy="${MID_ROW_Y}" r="47" class="home-arc solar-arc" transform="rotate(-90 ${C.col3} ${MID_ROW_Y})" />
-    <circle id="arc-bat" cx="${C.col3}" cy="${MID_ROW_Y}" r="47" class="home-arc bat-arc" transform="rotate(-90 ${C.col3} ${MID_ROW_Y})" />
-    <circle id="arc-grid" cx="${C.col3}" cy="${MID_ROW_Y}" r="47" class="home-arc grid-arc" transform="rotate(-90 ${C.col3} ${MID_ROW_Y})" />
-    <circle id="garc-solar" cx="${C.col1}" cy="${MID_ROW_Y}" r="47" class="home-arc solar-arc" transform="rotate(-90 ${C.col1} ${MID_ROW_Y})" />
-    <circle id="garc-bat" cx="${C.col1}" cy="${MID_ROW_Y}" r="47" class="home-arc bat-arc" transform="rotate(-90 ${C.col1} ${MID_ROW_Y})" />
+    ${ringRect(C.col3, MID_ROW_Y, 'arc-solar', 'class="home-arc solar-arc"')}
+    ${ringSquarePolygon(C.col3, MID_ROW_Y, 'arc-solar-square', 'class="home-arc solar-arc"')}
+    ${ringHexPolygon(C.col3, MID_ROW_Y, 'arc-solar-hex', 'class="home-arc solar-arc"')}
+    ${ringRect(C.col3, MID_ROW_Y, 'arc-bat', 'class="home-arc bat-arc"')}
+    ${ringSquarePolygon(C.col3, MID_ROW_Y, 'arc-bat-square', 'class="home-arc bat-arc"')}
+    ${ringHexPolygon(C.col3, MID_ROW_Y, 'arc-bat-hex', 'class="home-arc bat-arc"')}
+    ${ringRect(C.col3, MID_ROW_Y, 'arc-grid', 'class="home-arc grid-arc"')}
+    ${ringSquarePolygon(C.col3, MID_ROW_Y, 'arc-grid-square', 'class="home-arc grid-arc"')}
+    ${ringHexPolygon(C.col3, MID_ROW_Y, 'arc-grid-hex', 'class="home-arc grid-arc"')}
+    ${ringRect(C.col1, MID_ROW_Y, 'garc-solar', 'class="home-arc solar-arc"')}
+    ${ringSquarePolygon(C.col1, MID_ROW_Y, 'garc-solar-square', 'class="home-arc solar-arc"')}
+    ${ringHexPolygon(C.col1, MID_ROW_Y, 'garc-solar-hex', 'class="home-arc solar-arc"')}
+    ${ringRect(C.col1, MID_ROW_Y, 'garc-bat', 'class="home-arc bat-arc"')}
+    ${ringSquarePolygon(C.col1, MID_ROW_Y, 'garc-bat-square', 'class="home-arc bat-arc"')}
+    ${ringHexPolygon(C.col1, MID_ROW_Y, 'garc-bat-hex', 'class="home-arc bat-arc"')}
   </g>
 
   <!-- ── House consumer 1 (above the house, optional) ── -->
   <g id="n-consumer1" class="node" data-topo="consumer1">
-    <circle cx="${C.col3}" cy="${L.topY}" r="52" class="node-bg" id="c1-bg" />
-    <circle cx="${C.col3}" cy="${L.topY}" r="52" class="node-ring" id="c1-ring" />
+    ${nodeShapeRect(C.col3, L.topY, 'node-bg', 'c1-bg')}
+    ${nodeShapeHexagon(C.col3, L.topY, 'node-bg', 'c1-bg-hex')}
+    ${nodeShapeRect(C.col3, L.topY, 'node-ring', 'c1-ring')}
+    ${nodeShapeHexagon(C.col3, L.topY, 'node-ring', 'c1-ring-hex')}
     <path id="c1-icon" class="node-icon" transform="${iconTransform(C.col3, L.topY - 18, 28)}" d="${mdiPowerSocket}" />
     <text x="${C.col3}" y="${L.topY + 16}" class="val-text" id="t-c1-val"></text>
     <text x="${C.col3}" y="${L.topY + 29}" class="lbl-text" id="t-c1-lbl"></text>
@@ -680,8 +914,10 @@ export const SKELETON = `
 
   <!-- ── House consumer 3 (top-right, optional) ── -->
   <g id="n-consumer3" class="node" data-topo="consumer3">
-    <circle cx="${C.col4}" cy="${L.topY}" r="52" class="node-bg" id="c3-bg" />
-    <circle cx="${C.col4}" cy="${L.topY}" r="52" class="node-ring" id="c3-ring" />
+    ${nodeShapeRect(C.col4, L.topY, 'node-bg', 'c3-bg')}
+    ${nodeShapeHexagon(C.col4, L.topY, 'node-bg', 'c3-bg-hex')}
+    ${nodeShapeRect(C.col4, L.topY, 'node-ring', 'c3-ring')}
+    ${nodeShapeHexagon(C.col4, L.topY, 'node-ring', 'c3-ring-hex')}
     <path id="c3-icon" class="node-icon" transform="${iconTransform(C.col4, L.topY - 18, 28)}" d="${mdiPowerSocket}" />
     <text x="${C.col4}" y="${L.topY + 16}" class="val-text" id="t-c3-val"></text>
     <text x="${C.col4}" y="${L.topY + 29}" class="lbl-text" id="t-c3-lbl"></text>
@@ -689,8 +925,11 @@ export const SKELETON = `
 
   <!-- ── Battery (bottom, optional) ── -->
   <g id="n-battery" class="node" data-topo="battery">
-    <circle cx="${C.col2}" cy="${L.botY}" r="52" class="node-bg" id="bat-bg" />
-    <circle id="bat-soc-arc" cx="${C.col2}" cy="${L.botY}" r="47" class="home-arc" transform="rotate(-90 ${C.col2} ${L.botY})" />
+    ${nodeShapeRect(C.col2, L.botY, 'node-bg', 'bat-bg')}
+    ${nodeShapeHexagon(C.col2, L.botY, 'node-bg', 'bat-bg-hex')}
+    ${ringRect(C.col2, L.botY, 'bat-soc-arc', 'class="home-arc"')}
+    ${ringSquarePolygon(C.col2, L.botY, 'bat-soc-arc-square', 'class="home-arc"')}
+    ${ringHexPolygon(C.col2, L.botY, 'bat-soc-arc-hex', 'class="home-arc"')}
     <!-- Charge/discharge highlight — a glowing comet built by
          batteryCometMarkup() above (a three-blur-radius bloom/glow/core head
          plus a smoothly tapering multi-band tail) that travels around the
@@ -703,7 +942,8 @@ export const SKELETON = `
     <g id="bat-charge-highlight-group" class="bat-charge-highlight-group" mask="url(#bat-soc-mask)">
       ${batteryCometMarkup(C.col2, L.botY)}
     </g>
-    <circle cx="${C.col2}" cy="${L.botY}" r="52" class="node-ring" id="bat-ring" />
+    ${nodeShapeRect(C.col2, L.botY, 'node-ring', 'bat-ring')}
+    ${nodeShapeHexagon(C.col2, L.botY, 'node-ring', 'bat-ring-hex')}
     <path id="bat-icon" class="node-icon" transform="${iconTransform(C.col2, L.botY - 27, 28)}" d="${mdiBatteryMedium}" />
     <text x="${C.col2}" y="${L.botY + 5}" class="val-text" id="t-bat-soc"></text>
     <text x="${C.col2}" y="${L.botY + 18}" class="val-text val-text-accent" id="t-bat-watts" style="font-size: 11px; opacity: 0.75"></text>
@@ -712,8 +952,10 @@ export const SKELETON = `
 
   <!-- ── House consumer 2 (below the house, optional) ── -->
   <g id="n-consumer2" class="node" data-topo="consumer2">
-    <circle cx="${C.col3}" cy="${L.botY}" r="52" class="node-bg" id="c2-bg" />
-    <circle cx="${C.col3}" cy="${L.botY}" r="52" class="node-ring" id="c2-ring" />
+    ${nodeShapeRect(C.col3, L.botY, 'node-bg', 'c2-bg')}
+    ${nodeShapeHexagon(C.col3, L.botY, 'node-bg', 'c2-bg-hex')}
+    ${nodeShapeRect(C.col3, L.botY, 'node-ring', 'c2-ring')}
+    ${nodeShapeHexagon(C.col3, L.botY, 'node-ring', 'c2-ring-hex')}
     <path id="c2-icon" class="node-icon" transform="${iconTransform(C.col3, L.botY - 18, 28)}" d="${mdiPowerSocket}" />
     <text x="${C.col3}" y="${L.botY + 16}" class="val-text" id="t-c2-val"></text>
     <text x="${C.col3}" y="${L.botY + 29}" class="lbl-text" id="t-c2-lbl"></text>
@@ -721,8 +963,10 @@ export const SKELETON = `
 
   <!-- ── House consumer 4 (bottom-right, optional) ── -->
   <g id="n-consumer4" class="node" data-topo="consumer4">
-    <circle cx="${C.col4}" cy="${L.botY}" r="52" class="node-bg" id="c4-bg" />
-    <circle cx="${C.col4}" cy="${L.botY}" r="52" class="node-ring" id="c4-ring" />
+    ${nodeShapeRect(C.col4, L.botY, 'node-bg', 'c4-bg')}
+    ${nodeShapeHexagon(C.col4, L.botY, 'node-bg', 'c4-bg-hex')}
+    ${nodeShapeRect(C.col4, L.botY, 'node-ring', 'c4-ring')}
+    ${nodeShapeHexagon(C.col4, L.botY, 'node-ring', 'c4-ring-hex')}
     <path id="c4-icon" class="node-icon" transform="${iconTransform(C.col4, L.botY - 18, 28)}" d="${mdiPowerSocket}" />
     <text x="${C.col4}" y="${L.botY + 16}" class="val-text" id="t-c4-val"></text>
     <text x="${C.col4}" y="${L.botY + 29}" class="lbl-text" id="t-c4-lbl"></text>
@@ -731,8 +975,10 @@ export const SKELETON = `
   <!-- ── Battery load 1 (beside the battery, optional) — always fits in the
        bottom row, no matter which other optional nodes are shown. ── -->
   <g id="n-batteryload1" class="node" data-topo="batteryLoad1">
-    <circle cx="${C.col1}" cy="${L.botY}" r="52" class="node-bg" id="bl1-bg" />
-    <circle cx="${C.col1}" cy="${L.botY}" r="52" class="node-ring" id="bl1-ring" />
+    ${nodeShapeRect(C.col1, L.botY, 'node-bg', 'bl1-bg')}
+    ${nodeShapeHexagon(C.col1, L.botY, 'node-bg', 'bl1-bg-hex')}
+    ${nodeShapeRect(C.col1, L.botY, 'node-ring', 'bl1-ring')}
+    ${nodeShapeHexagon(C.col1, L.botY, 'node-ring', 'bl1-ring-hex')}
     <path id="bl1-icon" class="node-icon" transform="${iconTransform(C.col1, L.botY - 18, 28)}" d="${mdiPowerSocket}" />
     <text x="${C.col1}" y="${L.botY + 16}" class="val-text" id="t-bl1-val"></text>
     <text x="${C.col1}" y="${L.botY + 29}" class="lbl-text" id="t-bl1-lbl"></text>
@@ -741,8 +987,10 @@ export const SKELETON = `
   <!-- ── Battery load 2 (optional) — shares its slot (${C.col3},${L.botY})
        with consumer2; see the slot-conflict indicator below. ── -->
   <g id="n-batteryload2" class="node" data-topo="batteryLoad2">
-    <circle cx="${C.col3}" cy="${L.botY}" r="52" class="node-bg" id="bl2-bg" />
-    <circle cx="${C.col3}" cy="${L.botY}" r="52" class="node-ring" id="bl2-ring" />
+    ${nodeShapeRect(C.col3, L.botY, 'node-bg', 'bl2-bg')}
+    ${nodeShapeHexagon(C.col3, L.botY, 'node-bg', 'bl2-bg-hex')}
+    ${nodeShapeRect(C.col3, L.botY, 'node-ring', 'bl2-ring')}
+    ${nodeShapeHexagon(C.col3, L.botY, 'node-ring', 'bl2-ring-hex')}
     <path id="bl2-icon" class="node-icon" transform="${iconTransform(C.col3, L.botY - 18, 28)}" d="${mdiPowerSocket}" />
     <text x="${C.col3}" y="${L.botY + 16}" class="val-text" id="t-bl2-val"></text>
     <text x="${C.col3}" y="${L.botY + 29}" class="lbl-text" id="t-bl2-lbl"></text>
@@ -754,8 +1002,10 @@ export const SKELETON = `
        with fixed colors in JS rather than a FlowColors entry, since it
        signals a data misconfiguration rather than a themable flow. ── -->
   <g id="n-slot-conflict" class="node" data-topo="slotConflict">
-    <circle cx="${C.col3}" cy="${L.botY}" r="52" class="node-bg" id="conflict-bg" />
-    <circle cx="${C.col3}" cy="${L.botY}" r="52" class="node-ring" id="conflict-ring" />
+    ${nodeShapeRect(C.col3, L.botY, 'node-bg', 'conflict-bg')}
+    ${nodeShapeHexagon(C.col3, L.botY, 'node-bg', 'conflict-bg-hex')}
+    ${nodeShapeRect(C.col3, L.botY, 'node-ring', 'conflict-ring')}
+    ${nodeShapeHexagon(C.col3, L.botY, 'node-ring', 'conflict-ring-hex')}
     <path id="conflict-icon" class="node-icon" transform="${iconTransform(C.col3, L.botY - 18, 28)}" d="${mdiAlertCircle}" />
     <text x="${C.col3}" y="${L.botY + 16}" class="val-text" id="t-conflict-val">Conflict</text>
     <text x="${C.col3}" y="${L.botY + 29}" class="lbl-text" id="t-conflict-desc">Hover for details</text>

@@ -30,8 +30,11 @@ import {
   vSpeed,
   iconStyleInp,
   batteryChargeHighlightInp,
+  trackPulseInp,
   curveBendInp,
   vCurveBend,
+  sliderToCurveBend,
+  curveBendToSlider,
   dotCountInp,
   vDotCount,
   rowGapInp,
@@ -40,6 +43,8 @@ import {
   vColumnGap,
   currentNodeStyle,
   setNodeStyle,
+  currentNodeShape,
+  setNodeShape,
   currentDotShape,
   setDotShape,
 } from './playground-state';
@@ -218,13 +223,19 @@ function buildSnippet(fw: string): string {
       optFields.push(`${optInner}speedScale: ${+speedInp.value}`);
     if (currentNodeStyle !== 'soft')
       optFields.push(`${optInner}nodeStyle: "${currentNodeStyle}"`);
+    if (currentNodeShape !== 'circle')
+      optFields.push(`${optInner}nodeShape: "${currentNodeShape}"`);
     if (iconStyleInp.checked) optFields.push(`${optInner}iconStyle: "full"`);
     if (currentDotShape !== 'circle')
       optFields.push(`${optInner}dotShape: "${currentDotShape}"`);
     if (!batteryChargeHighlightInp.checked)
       optFields.push(`${optInner}batteryChargeHighlight: false`);
-    if (+curveBendInp.value !== 1)
-      optFields.push(`${optInner}curveBend: ${+curveBendInp.value}`);
+    if (trackPulseInp.checked) optFields.push(`${optInner}trackPulse: true`);
+    const curveBendVal = sliderToCurveBend(+curveBendInp.value);
+    // Epsilon, not strict equality — the slider<->curveBend mapping is a
+    // sqrt()/pow() round-trip (see sliderToCurveBend()), which can leave the
+    // default a hair off exactly 1 in floating point even when untouched.
+    if (Math.abs(curveBendVal - 1) > 1e-6) optFields.push(`${optInner}curveBend: ${curveBendVal}`);
     if (+dotCountInp.value !== 1)
       optFields.push(`${optInner}dotCount: ${+dotCountInp.value}`);
     if (+rowGapInp.value !== 125)
@@ -422,9 +433,11 @@ interface ShareState {
   // Everything below is omitted when it's still at its default, to keep the
   // common case (nobody touched the appearance controls) short.
   nodeStyle?: string;
+  nodeShape?: string;
   iconStyle?: true;
   dotShape?: string;
   batteryChargeHighlight?: false;
+  trackPulse?: true;
   curveBend?: number;
   dotCount?: number;
   rowGap?: number;
@@ -471,10 +484,13 @@ function encodeState(): ShareState {
     speed: +speedInp.value,
   };
   if (currentNodeStyle !== 'soft') state.nodeStyle = currentNodeStyle;
+  if (currentNodeShape !== 'circle') state.nodeShape = currentNodeShape;
   if (iconStyleInp.checked) state.iconStyle = true;
   if (currentDotShape !== 'circle') state.dotShape = currentDotShape;
   if (!batteryChargeHighlightInp.checked) state.batteryChargeHighlight = false;
-  if (+curveBendInp.value !== 1) state.curveBend = +curveBendInp.value;
+  if (trackPulseInp.checked) state.trackPulse = true;
+  const curveBendState = sliderToCurveBend(+curveBendInp.value);
+  if (Math.abs(curveBendState - 1) > 1e-6) state.curveBend = curveBendState;
   if (+dotCountInp.value !== 1) state.dotCount = +dotCountInp.value;
   if (+rowGapInp.value !== 125) state.rowGap = +rowGapInp.value;
   if (+columnGapInp.value !== 145) state.columnGap = +columnGapInp.value;
@@ -571,6 +587,8 @@ copyLinkBtn.addEventListener('click', () => {
 
   if (s.nodeStyle === 'soft' || s.nodeStyle === 'tonal' || s.nodeStyle === 'outline' || s.nodeStyle === 'filled')
     setNodeStyle(s.nodeStyle);
+  if (s.nodeShape === 'circle' || s.nodeShape === 'square' || s.nodeShape === 'hexagon')
+    setNodeShape(s.nodeShape);
   iconStyleInp.checked = s.iconStyle ?? false;
   el.options = { ...el.options, iconStyle: iconStyleInp.checked ? 'full' : 'default' };
   if (
@@ -587,9 +605,12 @@ copyLinkBtn.addEventListener('click', () => {
     ...el.options,
     batteryChargeHighlight: batteryChargeHighlightInp.checked,
   };
-  curveBendInp.value = String(s.curveBend ?? 1);
-  vCurveBend.textContent = `${curveBendInp.value}×`;
-  el.options = { ...el.options, curveBend: +curveBendInp.value };
+  trackPulseInp.checked = s.trackPulse ?? false;
+  el.options = { ...el.options, trackPulse: trackPulseInp.checked };
+  const restoredCurveBend = s.curveBend ?? 1;
+  curveBendInp.value = String(curveBendToSlider(restoredCurveBend));
+  vCurveBend.textContent = `${restoredCurveBend.toFixed(2)}×`;
+  el.options = { ...el.options, curveBend: restoredCurveBend };
   dotCountInp.value = String(s.dotCount ?? 1);
   vDotCount.textContent = dotCountInp.value;
   el.options = { ...el.options, dotCount: +dotCountInp.value };

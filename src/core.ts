@@ -5,6 +5,7 @@ import type {
   FlowTopology,
   PowerFlowOptions,
   NodeStyle,
+  NodeShape,
   DotShape,
 } from './types';
 import { DEFAULT_COLORS, DEFAULT_LABELS, DEFAULT_ICONS, DEFAULT_TOPOLOGY } from './defaults';
@@ -25,8 +26,15 @@ import {
   trackIdFor,
   MAX_DOTS_PER_TRACK,
   ARC_LENGTH,
+  RING_PERIMETER_SQUARE,
+  RING_PERIMETER_HEX,
   BATTERY_COMET_LAYERS,
   ORIENTED_DOT_SHAPES,
+  hexagonPoints,
+  NODE_HEX_CIRCUMRADIUS,
+  HEX_HOME_PULLBACK,
+  squareRingPoints,
+  hexagonRingPoints,
 } from './skeleton';
 
 export type {
@@ -117,6 +125,18 @@ export class PowerFlow {
   // rather than a flow.
   private static readonly CONFLICT_COLOR = '#ef4444';
 
+  // options.trackPulse: an active track's own animation-duration (see the
+  // "Track coloring" pass in update()) is BASE_PX / speed seconds, clamped
+  // to [MIN_S, MAX_S] — a higher-load flow visibly pulses faster, using the
+  // same speed flowSpeed() already computes for the traveling dot, without
+  // needing a second per-frame animation loop (this is a plain CSS
+  // `@keyframes` animation — see the `.track-pulse .track.active` rule in
+  // skeleton.ts — so the duration only needs setting once per data update,
+  // not every rAF tick).
+  private static readonly TRACK_PULSE_BASE_PX = 260;
+  private static readonly TRACK_PULSE_MIN_S = 0.35;
+  private static readonly TRACK_PULSE_MAX_S = 2.2;
+
   // Every node's icon + its 1-3 text lines below it, for iconStyle: 'full'
   // (see applyIconStyle()). Read from the skeleton rather than duplicated
   // here: each entry's *default*-mode transform/y values are cached once from
@@ -151,6 +171,22 @@ export class PowerFlow {
   private topology: FlowTopology = DEFAULT_TOPOLOGY;
   private speedScale = 1;
   private nodeStyle: NodeStyle = 'soft';
+  private nodeShape: NodeShape = 'circle';
+  // The coverage/SoC/comet rings' current perimeter — ARC_LENGTH (a
+  // circle's, 2·π·47), RING_PERIMETER_SQUARE (4×94), or RING_PERIMETER_HEX
+  // (6× a regular hexagon's own side length), matching `nodeShape`. Kept as
+  // its own field (set alongside `nodeShape`, see applyRingShape()) rather
+  // than recomputed inline at every dasharray/dashoffset call site, since
+  // several of those run every animation frame (tick()'s comet loop).
+  private ringPerimeter = ARC_LENGTH;
+  // Extra dashoffset (as a fraction of `ringPerimeter`) needed to land a
+  // ring's 0%-progress point at 12 o'clock — 0.25 for the circle variant
+  // (a <rect rx=ry=47>, whose own implicit path start isn't already there),
+  // 0 for square/hexagon (both explicit <polygon>s built with a vertex
+  // placed exactly at top-center, so they need no correction — see
+  // applyRingShape() and skeleton.ts's squareRingPoints()/
+  // hexagonRingPoints()).
+  private ringStartFraction = 0.25;
   private iconStyle: 'default' | 'full' = 'default';
   private dotShape: DotShape = 'circle';
   private dotCount = 1;
@@ -158,6 +194,7 @@ export class PowerFlow {
   private rowGap = DEFAULT_ROW_GAP;
   private columnGap = DEFAULT_COLUMN_GAP;
   private batteryChargeHighlight = true;
+  private trackPulse = false;
   // Tracks whether the consumer2/batteryLoad2 slot conflict was already active
   // last render, so the console warning fires once per transition into the
   // conflicting state rather than on every `update()` call.
@@ -181,8 +218,11 @@ export class PowerFlow {
   // different position — see the .bat-charge-* CSS comment in skeleton.ts
   // for the full "why". `delay` (a 0..1 fraction of a lap) is copied from
   // BATTERY_COMET_LAYERS once in initBatteryComet(); everything else here
-  // changes every frame/update.
-  private batteryCometLayers: { el: SVGCircleElement; delay: number }[] = [];
+  // changes every frame/update. Re-derived (not just cached once) whenever
+  // `nodeShape` changes — see applyRingShape() — since each layer has three
+  // shape variants (see batteryCometMarkup() in skeleton.ts) and only one
+  // is ever the live element tick() should be animating.
+  private batteryCometLayers: { el: SVGGraphicsElement; delay: number }[] = [];
   private batteryCometPhase = 0;
   private batteryCometSpeed = 0; // px/s along ARC_LENGTH; 0 while inactive
   private batteryCometDirection = 1; // +1 charging, -1 discharging
@@ -241,13 +281,17 @@ export class PowerFlow {
     }
   }
 
-  // One-time lookup of each battery comet layer's element (see the
-  // `batteryCometLayers` field comment) — dasharray is already baked into
-  // the markup as a static attribute (see skeleton.ts), so all that's
-  // cached here is the element ref itself plus its fixed `delay`.
+  // Lookup of each battery comet layer's *currently active shape variant*
+  // element (see the `batteryCometLayers` field comment) — dasharray is
+  // already baked into each variant as a static attribute (see
+  // cometDasharray() in skeleton.ts), so all that's cached here is the
+  // element ref itself plus its fixed `delay`. Called both from the
+  // constructor and from applyRingShape() (whenever `nodeShape` changes),
+  // since which variant is "active" changes there.
   private initBatteryComet() {
+    const suffix = this.ringShapeSuffix();
     this.batteryCometLayers = BATTERY_COMET_LAYERS.map(({ id, delay }) => ({
-      el: this.el[id] as SVGCircleElement,
+      el: this.el[`${id}${suffix}`] as SVGGraphicsElement,
       delay,
     })).filter((l) => l.el);
   }
@@ -312,12 +356,12 @@ export class PowerFlow {
         });
         continue;
       }
-      const bg = this.el[`${prefix}-bg`] as SVGCircleElement | undefined;
+      const bg = this.el[`${prefix}-bg`] as SVGRectElement | undefined;
       if (!bg) continue;
-      const cx = Number(bg.getAttribute('cx'));
-      const cy = Number(bg.getAttribute('cy'));
-      const r = Number(bg.getAttribute('r'));
-      const size = r * 1.5;
+      const width = Number(bg.getAttribute('width'));
+      const cx = Number(bg.getAttribute('x')) + width / 2;
+      const cy = Number(bg.getAttribute('y')) + width / 2;
+      const size = (width / 2) * 1.5;
       iconEl?.setAttribute(
         'transform',
         `translate(${cx - size / 2} ${cy - size / 2}) scale(${size / 24})`,
@@ -365,6 +409,26 @@ export class PowerFlow {
     (this.el[id] as SVGPathElement | undefined)?.setAttribute('d', d);
   }
 
+  // Repositions all three shape variants of one coverage/SoC/comet ring
+  // element (see applyRingShape()'s own comment) to the given center —
+  // whether or not each is the currently-visible one, so nodeShape can be
+  // switched later without anything being stale. The circle variant is a
+  // <rect>, moved via x/y (plus the same rotate() it's always used, to
+  // land its own native start point at 12 o'clock — see ringRect() in
+  // skeleton.ts); square/hexagon are <polygon>s, moved by regenerating
+  // their `points` outright (cheap — six or so numbers — and simpler than
+  // trying to translate a polygon's existing points).
+  private repositionRingVariants(id: string, cx: number, cy: number) {
+    const circle = this.el[id] as SVGRectElement | undefined;
+    circle?.setAttribute('x', String(cx - 47));
+    circle?.setAttribute('y', String(cy - 47));
+    circle?.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
+    const square = this.el[`${id}-square`] as SVGPolygonElement | undefined;
+    square?.setAttribute('points', squareRingPoints(cx, cy));
+    const hex = this.el[`${id}-hex`] as SVGPolygonElement | undefined;
+    hex?.setAttribute('points', hexagonRingPoints(cx, cy));
+  }
+
   // Repositions every node for the current `rowGap`/`columnGap`, plus the
   // straight tracks, coverage rings and SoC ring that touch those rows/
   // columns directly (the 6 curved tracks are handled by applyCurveBend(),
@@ -382,12 +446,19 @@ export class PowerFlow {
     const cols = columnLayout(this.columnGap);
     for (const { prefix, texts } of PowerFlow.ICON_LAYOUT_NODES) {
       const [cx, cy] = PowerFlow.nodeXY(prefix, rows, cols);
-      const bg = this.el[`${prefix}-bg`] as SVGCircleElement | undefined;
-      bg?.setAttribute('cx', String(cx));
-      bg?.setAttribute('cy', String(cy));
-      const ring = this.el[`${prefix}-ring`] as SVGCircleElement | undefined;
-      ring?.setAttribute('cx', String(cx));
-      ring?.setAttribute('cy', String(cy));
+      const bg = this.el[`${prefix}-bg`] as SVGRectElement | undefined;
+      bg?.setAttribute('x', String(cx - 52));
+      bg?.setAttribute('y', String(cy - 52));
+      const ring = this.el[`${prefix}-ring`] as SVGRectElement | undefined;
+      ring?.setAttribute('x', String(cx - 52));
+      ring?.setAttribute('y', String(cy - 52));
+      // The hexagon nodeShape variant (see applyNodeShape()) — repositioned
+      // here too, whether or not it's the currently-visible one, so it's
+      // never stale if the caller switches to 'hexagon' after a rowGap/
+      // columnGap change.
+      const hexPts = hexagonPoints(cx, cy);
+      (this.el[`${prefix}-bg-hex`] as SVGPolygonElement | undefined)?.setAttribute('points', hexPts);
+      (this.el[`${prefix}-ring-hex`] as SVGPolygonElement | undefined)?.setAttribute('points', hexPts);
       for (const id of texts) (this.el[id] as SVGTextElement | undefined)?.setAttribute('x', String(cx));
 
       // Refreshes `iconLayoutCache` (icon/text offsets from the node's own
@@ -413,55 +484,102 @@ export class PowerFlow {
     // Grid's own export coverage rings — home's (arc-*) never move, since
     // home sits on both a fixed row and column.
     for (const id of ['garc-solar', 'garc-bat']) {
-      const el = this.el[id] as SVGCircleElement | undefined;
-      el?.setAttribute('cx', String(cols.col1));
-      el?.setAttribute('transform', `rotate(-90 ${cols.col1} ${MID_ROW_Y})`);
+      this.repositionRingVariants(id, cols.col1, MID_ROW_Y);
     }
     // bat-soc-arc itself, its mask (bat-soc-mask-arc) and every layer of the
     // charge/discharge comet (BATTERY_COMET_LAYERS — see skeleton.ts) all sit
     // concentric on the same ring, so they all move together here.
-    const batRotate = `rotate(-90 ${cols.col2} ${rows.botY})`;
     for (const id of [
       'bat-soc-arc',
       'bat-soc-mask-arc',
       ...BATTERY_COMET_LAYERS.map((l) => l.id),
     ]) {
-      const el = this.el[id] as SVGCircleElement | undefined;
-      el?.setAttribute('cx', String(cols.col2));
-      el?.setAttribute('cy', String(rows.botY));
-      el?.setAttribute('transform', batRotate);
+      this.repositionRingVariants(id, cols.col2, rows.botY);
     }
 
-    this.setPathD('p-grid-home', `M${cols.col1 + 52},${MID_ROW_Y} H${cols.col3 - 52}`);
+    // Pull-back for tracks that run dead-horizontal through a node's own
+    // vertical center — the widest point of every shape except hexagon,
+    // whose vertex-to-vertex width there is NODE_HEX_CIRCUMRADIUS (~60px),
+    // not the usual 52. p-solar-bat/p-home-consumer1/p-home-consumer2 don't
+    // need this: they pull back *vertically* instead, where every shape
+    // (hexagon included — its apothem is still 52, only its width differs)
+    // has the same 52px half-size.
+    const hPull = this.nodeShape === 'hexagon' ? NODE_HEX_CIRCUMRADIUS : 52;
+    this.setPathD('p-grid-home', `M${cols.col1 + hPull},${MID_ROW_Y} H${cols.col3 - hPull}`);
     this.setPathD('p-solar-bat', `M${cols.col2},${rows.topInner} V${rows.botInner}`);
     this.setPathD('p-home-consumer1', `M${cols.col3},${MID_ROW_Y - 52} V${rows.topInner}`);
     this.setPathD('p-home-consumer2', `M${cols.col3},${MID_ROW_Y + 52} V${rows.botInner}`);
-    this.setPathD('p-bat-batteryload1', `M${cols.col2 - 52},${rows.botY} H${cols.col1 + 52}`);
-    this.setPathD('p-bat-batteryload2', `M${cols.col2 + 52},${rows.botY} H${cols.col3 - 52}`);
+    this.setPathD('p-bat-batteryload1', `M${cols.col2 - hPull},${rows.botY} H${cols.col1 + hPull}`);
+    this.setPathD('p-bat-batteryload2', `M${cols.col2 + hPull},${rows.botY} H${cols.col3 - hPull}`);
   }
 
-  // Scales each of the 6 curved tracks' *tangent handles* — P1 relative to
-  // P0, P2 relative to P3 — by `bend`, keeping their direction fixed. This
-  // keeps the departure/arrival directions exactly as designed (e.g. "leaves
-  // solar straight down, arrives at home straight across") at every bend
-  // level, only changing how long the curve holds that direction before
-  // turning: bend=0 collapses both handles onto their anchor point, which
-  // degenerates the cubic bezier into the straight P0→P3 line; bend=1
-  // reproduces the skeleton's static `d` values exactly at the default
-  // `rowGap` (the handles are already at that exact length); bend>1
-  // stretches the handles further out, reading as a straighter
-  // departure/arrival with a sharper turn in the middle, rather than one
-  // continuously bulging arc.
+  // `curveBend` behaves like a corner *radius*: `0` is a sharp, un-rounded
+  // right-angle elbow — two straight segments meeting at a point — and
+  // `CURVE_BEND_MAX` is a plain direct line (so large a "radius" the corner
+  // disappears entirely). Getting from one to the other is a two-phase
+  // blend of a single quadratic bezier's own three points (S = start, E =
+  // end, C = control) — chosen so *neither* extreme needs special-casing:
+  // both fall out of the same continuous formula as `u` (bend/CURVE_BEND_MAX)
+  // sweeps 0→1, so there's no jump anywhere, including right at the
+  // direct-line end (a flat special case there previously meant the curve
+  // stayed a large, fully-formed bulge all the way up to bend=CURVE_BEND_MAX
+  // and only snapped flat exactly at the max value).
+  //
+  // Phase 1 (u: 0→0.5) — S and E slide from the fixed right-angle `corner`
+  // point *out* to p0/p3, while C stays pinned at that same corner the
+  // whole time. Since p0's own fixed departure direction (curvesForLayout()
+  // built it that way) points exactly at `corner`, a control point sitting
+  // there can never introduce a new tangent at S — so every value in this
+  // phase keeps the "straight out of the node, into a corner-anchored
+  // curve" character with no kink, from a zero-length curve at a sharp
+  // corner (u=0) growing into a full corner-anchored arc spanning the
+  // entire p0-p3 path (u=0.5).
+  //
+  // Phase 2 (u: 0.5→1) — S and E now stay fixed at p0/p3 (the "straight
+  // stub" has fully vanished), and instead C itself slides from `corner`
+  // toward the p0-p3 diagonal's own midpoint. A quadratic bezier whose
+  // control point is exactly the midpoint of its two endpoints is provably
+  // just the straight line between them (the weighted-average formula
+  // degenerates algebraically), so this phase asymptotically *flattens*
+  // the phase-1 arc into a plain diagonal, reaching it exactly at u=1 —
+  // the direct line is this formula's natural limit, not a separate case.
+  private static readonly CURVE_BEND_MAX = 2.5;
   private applyCurveBend() {
-    const bend = this.curveBend;
-    for (const { id, p0, p1, p2, p3 } of curvesForLayout(this.rowGap, this.columnGap)) {
+    const u = this.curveBend / PowerFlow.CURVE_BEND_MAX;
+    // The home/grid-side fan-out pull-back assumes a uniform 52px node
+    // boundary — true for circle/square, but a regular hexagon's actual
+    // (slanted) edge at that fan-out offset sits further out (see
+    // HEX_HOME_PULLBACK in skeleton.ts) — using the circle/square value
+    // there would land these 6 curves' own endpoints inside the wider
+    // hexagon, clipping into it.
+    const homePullback = this.nodeShape === 'hexagon' ? HEX_HOME_PULLBACK : undefined;
+    for (const { id, p0, p1, p3 } of curvesForLayout(this.rowGap, this.columnGap, homePullback)) {
       const path = this.el[id] as SVGPathElement | undefined;
       if (!path) continue;
-      const b1x = p0[0] + bend * (p1[0] - p0[0]);
-      const b1y = p0[1] + bend * (p1[1] - p0[1]);
-      const b2x = p3[0] + bend * (p2[0] - p3[0]);
-      const b2y = p3[1] + bend * (p2[1] - p3[1]);
-      path.setAttribute('d', `M${p0[0]},${p0[1]} C${b1x},${b1y} ${b2x},${b2y} ${p3[0]},${p3[1]}`);
+      // p1 sits purely in p0's own fixed departure direction (curvesForLayout()
+      // built it that way) — whichever axis p1 shares with p0 tells us
+      // whether that departure is vertical or horizontal, and the corner
+      // is simply where a line continuing in that direction from p0
+      // crosses the line p3 arrives along (the other axis).
+      const exitsVertically = p0[0] === p1[0];
+      const corner: [number, number] = exitsVertically ? [p0[0], p3[1]] : [p3[0], p0[1]];
+      const mid: [number, number] = [(p0[0] + p3[0]) / 2, (p0[1] + p3[1]) / 2];
+      let s: [number, number];
+      let e: [number, number];
+      let ctrl: [number, number];
+      if (u <= 0.5) {
+        const f = u / 0.5;
+        s = [corner[0] + f * (p0[0] - corner[0]), corner[1] + f * (p0[1] - corner[1])];
+        e = [corner[0] + f * (p3[0] - corner[0]), corner[1] + f * (p3[1] - corner[1])];
+        ctrl = corner;
+      } else {
+        const f = (u - 0.5) / 0.5;
+        s = p0;
+        e = p3;
+        ctrl = [corner[0] + f * (mid[0] - corner[0]), corner[1] + f * (mid[1] - corner[1])];
+      }
+      const d = `M${p0[0]},${p0[1]} L${s[0]},${s[1]} Q${ctrl[0]},${ctrl[1]} ${e[0]},${e[1]} L${p3[0]},${p3[1]}`;
+      path.setAttribute('d', d);
     }
     // Changing `d` changes each affected path's total length — every flow's
     // cached `length` (measured once in initDots()) would otherwise go stale
@@ -487,7 +605,95 @@ export class PowerFlow {
   ];
   private applyRingShadow() {
     const on = this.nodeStyle === 'filled';
-    for (const id of PowerFlow.COVERAGE_RING_IDS) this.el[id]?.classList.toggle('node-filled-ink', on);
+    // Applied to all three shape variants regardless of which is currently
+    // visible (cheap, and simpler than tracking "just the active one" here
+    // too) — matches paintNode()'s own -hex node treatment.
+    for (const id of PowerFlow.COVERAGE_RING_IDS) {
+      for (const variant of ['', '-square', '-hex']) this.el[`${id}${variant}`]?.classList.toggle('node-filled-ink', on);
+    }
+  }
+
+  // Every node's `-bg`/`-ring` is a <rect>; `'circle'`<->`'square'` is a
+  // corner-radius switch (see nodeShapeRect() in skeleton.ts): rx=ry=52
+  // (half its own 104 width/height) reads as a circle, rx=ry=0 as a sharp
+  // square — CSS-animatable (see the `.node-bg`/`.node-ring` transition in
+  // skeleton.ts), so toggling between these two morphs smoothly. `'hexagon'`
+  // is a genuinely different element — a pre-rendered `<polygon>` (see
+  // nodeShapeHexagon() in skeleton.ts, ids `${prefix}-bg-hex`/`-ring-hex`),
+  // swapped in via `display` the same way dotShape's non-circle marker
+  // shapes are (see ORIENTED_DOT_SHAPES) — a stroked rect clipped to a
+  // hexagon comes out as disconnected fragments rather than a clean
+  // outline (clip-path clips the rendered stroke, it doesn't re-route it),
+  // so unlike circle<->square this switch snaps rather than morphs.
+  private applyNodeShape() {
+    const radius = this.nodeShape === 'circle' ? '52' : '0';
+    const hexActive = this.nodeShape === 'hexagon';
+    for (const { prefix } of PowerFlow.ICON_LAYOUT_NODES) {
+      for (const suffix of ['bg', 'ring']) {
+        const rect = this.el[`${prefix}-${suffix}`] as SVGRectElement | undefined;
+        rect?.setAttribute('rx', radius);
+        rect?.setAttribute('ry', radius);
+        if (rect) rect.style.display = hexActive ? 'none' : '';
+        const hex = this.el[`${prefix}-${suffix}-hex`] as SVGElement | undefined;
+        if (hex) hex.style.display = hexActive ? '' : 'none';
+      }
+    }
+  }
+
+  // The home/grid coverage rings, the battery SoC ring + its mask, and the
+  // battery charge/discharge comet (see ringRect()/ringSquarePolygon()/
+  // ringHexPolygon()/batteryCometMarkup() in skeleton.ts) each have three
+  // pre-rendered variants — a circle (<rect rx=ry=47>, unchanged from
+  // before nodeShape existed), a square, and a hexagon (both <polygon>s,
+  // *not* another rx/ry state of that same rect: a plain rect's own
+  // implicit path start point turned out not to land at 12 o'clock the way
+  // the fully-rounded circle rect's does, so square/hexagon instead use an
+  // explicit polygon with a vertex placed exactly at top-center — see
+  // squareRingPoints()/hexagonRingPoints() in skeleton.ts). Exactly one
+  // variant is shown at a time, the same `display`-swap pattern node bg/
+  // ring's hexagon variant already uses.
+  //
+  // Besides which element is visible, each shape's own *perimeter* differs
+  // (circle: 2·π·47; square: plain 4×94; hexagon: 6× its own side, which
+  // for a regular hexagon equals its circumradius) — `this.ringPerimeter`
+  // (read by arc()/applyBatteryHighlight()/tick()'s comet loop) and
+  // `this.ringStartFraction` (the extra dashoffset the *circle* variant
+  // alone needs to land its native start point at 12 o'clock — 0 for
+  // square/hexagon, whose native start already *is* 12 o'clock by
+  // construction) are both updated here. The comet's dasharray, baked into
+  // the markup per-shape already (see cometDasharray() in skeleton.ts),
+  // needs no runtime recompute — only which layer's *elements*
+  // initBatteryComet() points tick() at changes, so that's re-run here too.
+  private static readonly RING_IDS = [
+    'arc-solar',
+    'arc-bat',
+    'arc-grid',
+    'garc-solar',
+    'garc-bat',
+    'bat-soc-arc',
+    'bat-soc-mask-arc',
+  ];
+  private ringShapeSuffix(): '' | '-square' | '-hex' {
+    return this.nodeShape === 'square' ? '-square' : this.nodeShape === 'hexagon' ? '-hex' : '';
+  }
+  private applyRingShape() {
+    const suffix = this.ringShapeSuffix();
+    this.ringPerimeter =
+      this.nodeShape === 'square' ? RING_PERIMETER_SQUARE : this.nodeShape === 'hexagon' ? RING_PERIMETER_HEX : ARC_LENGTH;
+    this.ringStartFraction = this.nodeShape === 'circle' ? 0.25 : 0;
+    for (const id of PowerFlow.RING_IDS) {
+      for (const variant of ['', '-square', '-hex']) {
+        const el = this.el[`${id}${variant}`] as SVGElement | undefined;
+        if (el) el.style.display = variant === suffix ? '' : 'none';
+      }
+    }
+    for (const { id } of BATTERY_COMET_LAYERS) {
+      for (const variant of ['', '-square', '-hex']) {
+        const el = this.el[`${id}${variant}`] as SVGElement | undefined;
+        if (el) el.style.display = variant === suffix ? '' : 'none';
+      }
+    }
+    this.initBatteryComet();
   }
 
   // How far (in px along the path) placeMarker() samples on either side of a
@@ -611,7 +817,7 @@ export class PowerFlow {
       });
     }
     if (this.batteryCometSpeed > 0) {
-      this.batteryCometPhase += (this.batteryCometSpeed * dt) / ARC_LENGTH;
+      this.batteryCometPhase += (this.batteryCometSpeed * dt) / this.ringPerimeter;
       this.batteryCometPhase -= Math.floor(this.batteryCometPhase); // wrap into [0, 1)
       for (const { el, delay } of this.batteryCometLayers) {
         // A trailing layer shows where the head was `delay` (a fraction of
@@ -622,7 +828,7 @@ export class PowerFlow {
         layerPhase -= Math.floor(layerPhase); // wrap into [0, 1)
         el.setAttribute(
           'stroke-dashoffset',
-          String(this.batteryCometDirection * -layerPhase * ARC_LENGTH),
+          String(this.batteryCometDirection * -layerPhase * this.ringPerimeter),
         );
       }
     }
@@ -651,6 +857,9 @@ export class PowerFlow {
     if (settings?.nodeStyle !== undefined) {
       this.nodeStyle = settings.nodeStyle;
     }
+    if (settings?.nodeShape !== undefined) {
+      this.nodeShape = settings.nodeShape;
+    }
     if (settings?.iconStyle !== undefined) {
       this.iconStyle = settings.iconStyle;
     }
@@ -675,7 +884,13 @@ export class PowerFlow {
     if (settings?.batteryChargeHighlight !== undefined) {
       this.batteryChargeHighlight = settings.batteryChargeHighlight;
     }
+    if (settings?.trackPulse !== undefined) {
+      this.trackPulse = settings.trackPulse;
+    }
+    this.svg.classList.toggle('track-pulse', this.trackPulse);
     this.applyLayout();
+    this.applyNodeShape();
+    this.applyRingShape();
     this.applyIconStyle();
     this.applyCurveBend();
     this.applyRingShadow();
@@ -749,12 +964,19 @@ export class PowerFlow {
     // (consumer3/consumer4) only widens the viewBox when actually used;
     // `minX`/the 4th column's position both move with `columnGap`.
     const { topOuter, botOuter } = rowLayout(this.rowGap);
-    const { col3, col4, minX } = columnLayout(this.columnGap);
+    const { col3, col4, minX: baseMinX } = columnLayout(this.columnGap);
     const hasTop = hasSolar || hasConsumer1 || hasConsumer3;
     const hasBottom = hasBattery || hasConsumer2 || hasConsumer4;
     const minY = hasTop ? topOuter - 8 : MID_ROW_Y - 52 - 8;
     const maxY = hasBottom ? botOuter + 8 : MID_ROW_Y + 52 + 8;
-    const maxX = (hasConsumer3 || hasConsumer4 ? col4 : col3) + 52 + 3;
+    // A hexagon node is wider than every other shape's 104px footprint (see
+    // NodeShape's own doc comment — a regular hexagon can't fit equal-length
+    // sides into that box) — the left/rightmost columns' own hexagons would
+    // otherwise get clipped at the diagram's own edge, so both sides of the
+    // viewBox widen by the same extra margin every hexagon already needs.
+    const hexExtra = this.nodeShape === 'hexagon' ? NODE_HEX_CIRCUMRADIUS - 52 : 0;
+    const minX = baseMinX - hexExtra;
+    const maxX = (hasConsumer3 || hasConsumer4 ? col4 : col3) + 52 + 3 + hexExtra;
     const width = maxX - minX;
     const height = maxY - minY;
     this.svg.setAttribute('viewBox', `${minX} ${minY} ${width} ${height}`);
@@ -852,20 +1074,35 @@ export class PowerFlow {
     // shared by two dots that travel in opposite directions — they're always
     // mutually exclusive (never both carry flow at once), so aggregating "is
     // any dot on this track visible" per track, rather than per dot, avoids
-    // one dot's `setDot` call clobbering the state the other just set.
-    const trackActive: Record<string, string | null> = {};
+    // one dot's `setDot` call clobbering the state the other just set. Also
+    // carries the active dot's own `speed` along, purely for
+    // `options.trackPulse` below — a track pulses in step with how fast its
+    // own dot is traveling, so a higher-load flow visibly pulses faster.
+    const trackActive: Record<string, { colorVar: string | null; speed: number }> = {};
     for (const d of DOTS) {
       const id = trackIdFor(d.path);
       const dotState = this.dots[d.id];
-      if (dotState.visible) trackActive[id] = DOT_CLS_TO_COLOR_VAR[d.cls] ?? d.cls;
-      else if (!(id in trackActive)) trackActive[id] = null;
+      if (dotState.visible) {
+        trackActive[id] = { colorVar: DOT_CLS_TO_COLOR_VAR[d.cls] ?? d.cls, speed: dotState.speed };
+      } else if (!(id in trackActive)) {
+        trackActive[id] = { colorVar: null, speed: 0 };
+      }
     }
     for (const id in trackActive) {
-      const colorVar = trackActive[id];
+      const { colorVar, speed } = trackActive[id];
       const el = this.el[id] as SVGElement | undefined;
       if (!el) continue;
       el.classList.toggle('active', colorVar !== null);
-      if (colorVar) el.style.setProperty('--track-color', `var(--sfd-${colorVar})`);
+      if (colorVar) {
+        el.style.setProperty('--track-color', `var(--sfd-${colorVar})`);
+        if (this.trackPulse) {
+          const duration = Math.max(
+            PowerFlow.TRACK_PULSE_MIN_S,
+            Math.min(PowerFlow.TRACK_PULSE_MAX_S, PowerFlow.TRACK_PULSE_BASE_PX / Math.max(speed, 1)),
+          );
+          el.style.setProperty('animation-duration', `${duration.toFixed(2)}s`);
+        }
+      }
     }
 
     // ── Solar node ──
@@ -932,13 +1169,13 @@ export class PowerFlow {
       // this ring's stroke is `batteryColor` — the *same* color `paintNode`
       // just gave the background, so at `filled`'s full opacity it would
       // otherwise vanish into it entirely, not just blend.
-      const socArc = this.el['bat-soc-arc'] as SVGCircleElement;
+      const socArc = this.el[`bat-soc-arc${this.ringShapeSuffix()}`] as SVGGraphicsElement;
       socArc.style.stroke = this.nodeStyle === 'filled' ? FILLED_INK : batteryColor;
       const pct =
         data.batterySoc != null
           ? Math.max(0, Math.min(100, data.batterySoc)) / 100
           : 0;
-      socArc.style.strokeDasharray = `${pct * ARC_LENGTH} ${ARC_LENGTH}`;
+      socArc.style.strokeDasharray = `${pct * this.ringPerimeter} ${this.ringPerimeter}`;
       this.applyBatteryHighlight(batteryWatts, pct);
     }
 
@@ -1057,7 +1294,13 @@ export class PowerFlow {
     const ringHidden = this.nodeStyle === 'tonal' || isFilled;
 
     this.fill(`${prefix}-bg`, bg);
+    // The hexagon nodeShape variant (see applyNodeShape()) is a separate
+    // element, painted identically here regardless of which one is
+    // currently visible — cheap (`fill()`/`stroke()` no-op on a missing
+    // id), and means a nodeShape switch never needs to re-run this.
+    this.fill(`${prefix}-bg-hex`, bg);
     this.stroke(`${prefix}-ring`, ringHidden ? 'none' : color);
+    this.stroke(`${prefix}-ring-hex`, ringHidden ? 'none' : color);
     this.fill(`${prefix}-icon`, isFilled ? FILLED_INK : color);
     this.filledShadow(`${prefix}-icon`, isFilled);
     for (const id of texts) {
@@ -1233,9 +1476,9 @@ export class PowerFlow {
   // dasharray in sync, so re-enabling it later doesn't show a stale extent.
   private applyBatteryHighlight(batteryWatts: number, pct: number) {
     const group = this.el['bat-charge-highlight-group'] as SVGGElement | undefined;
-    const mask = this.el['bat-soc-mask-arc'] as SVGCircleElement | undefined;
+    const mask = this.el[`bat-soc-mask-arc${this.ringShapeSuffix()}`] as SVGGraphicsElement | undefined;
     if (!group || !mask) return;
-    mask.setAttribute('stroke-dasharray', `${pct * ARC_LENGTH} ${ARC_LENGTH}`);
+    mask.setAttribute('stroke-dasharray', `${pct * this.ringPerimeter} ${this.ringPerimeter}`);
     const rate = Math.abs(batteryWatts);
     const active = this.batteryChargeHighlight && rate > 0;
     group.classList.toggle('active', active);
@@ -1244,27 +1487,26 @@ export class PowerFlow {
       return;
     }
     group.classList.toggle('discharging', batteryWatts < 0);
-    this.batteryCometSpeed = this.flowSpeed(rate, ARC_LENGTH);
+    this.batteryCometSpeed = this.flowSpeed(rate, this.ringPerimeter);
     this.batteryCometDirection = batteryWatts < 0 ? -1 : 1;
   }
 
-  // Render a share (0..1) as a dash arc on the home ring, offset by the share
-  // already drawn before it.
+  // Render a share (0..1) as a dash arc on the home ring, offset by the
+  // share already drawn before it. Targets whichever of `id`'s three shape
+  // variants applyRingShape() most recently made active (always run first
+  // in update(), before any of this function's own callers) — the other
+  // two stay hidden regardless of `share`, since applyRingShape() already
+  // hid them unconditionally.
   private arc(id: string, share: number, dash: number, offsetShare: number) {
-    const node = this.el[id] as SVGCircleElement;
+    const node = this.el[`${id}${this.ringShapeSuffix()}`] as SVGGraphicsElement;
     if (share <= 0) {
       node.style.display = 'none';
       return;
     }
     node.style.display = '';
-    node.setAttribute(
-      'stroke-dasharray',
-      `${dash * ARC_LENGTH} ${ARC_LENGTH - dash * ARC_LENGTH}`,
-    );
-    node.setAttribute(
-      'stroke-dashoffset',
-      `${ARC_LENGTH * 0.25 - offsetShare * ARC_LENGTH}`,
-    );
+    const len = this.ringPerimeter;
+    node.setAttribute('stroke-dasharray', `${dash * len} ${len - dash * len}`);
+    node.setAttribute('stroke-dashoffset', `${len * this.ringStartFraction - offsetShare * len}`);
   }
 }
 

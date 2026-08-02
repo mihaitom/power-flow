@@ -53,6 +53,14 @@
           </div>
         </div>
         <div class="ctrl">
+          <label>Node shape</label>
+          <div class="chip-tabs" id="node-shape-tabs">
+            <button data-node-shape="circle" class="on">Circle</button>
+            <button data-node-shape="square">Square</button>
+            <button data-node-shape="hexagon">Hexagon</button>
+          </div>
+        </div>
+        <div class="ctrl">
           <label>Dot shape</label>
           <div class="chip-tabs" id="dot-shape-tabs">
             <button data-dot-shape="circle" class="on">Circle</button>
@@ -70,15 +78,26 @@
           <input id="battery-charge-highlight" type="checkbox" checked />
           Battery charge/discharge highlight
         </label>
+        <label class="toggle">
+          <input id="track-pulse" type="checkbox" />
+          Pulse active tracks (speed follows load)
+        </label>
         <div class="ctrl">
           <label>Curve bend <span class="v" id="v-curve-bend"></span></label>
+          <!-- Slider position is a plain 0..1 scale, not the curveBend value
+               itself — see sliderToCurveBend()/curveBendToSlider() in
+               playground-state.ts for the (quadratic, "logarithmic-feeling")
+               mapping between the two, which gives finer drag resolution
+               near curveBend=0 (the sharp-corner end) than near its
+               direct-line max. value="0.6324..." is curveBendToSlider(1),
+               the default curveBend. -->
           <input
             id="curve-bend"
             type="range"
             min="0"
-            max="2.5"
-            step="0.1"
-            value="1"
+            max="1"
+            step="0.001"
+            value="0.6324555320336759"
           />
         </div>
         <div class="ctrl">

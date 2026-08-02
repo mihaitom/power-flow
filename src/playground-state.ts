@@ -122,6 +122,23 @@ nodeStyleTabsEl.querySelectorAll('button').forEach((b) => {
   });
 });
 
+const NODE_SHAPES = ['circle', 'square', 'hexagon'] as const;
+export let currentNodeShape: (typeof NODE_SHAPES)[number] = 'circle';
+const nodeShapeTabsEl = document.getElementById('node-shape-tabs') as HTMLElement;
+export function setNodeShape(shape: (typeof NODE_SHAPES)[number]) {
+  currentNodeShape = shape;
+  nodeShapeTabsEl.querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('on', (b as HTMLElement).dataset.nodeShape === shape);
+  });
+  el.options = { ...el.options, nodeShape: shape };
+}
+nodeShapeTabsEl.querySelectorAll('button').forEach((b) => {
+  b.addEventListener('click', () => {
+    setNodeShape((b as HTMLElement).dataset.nodeShape as (typeof NODE_SHAPES)[number]);
+    notifyStateChange();
+  });
+});
+
 const iconStyleInp = document.getElementById('icon-style-full') as HTMLInputElement;
 iconStyleInp.addEventListener('input', () => {
   el.options = { ...el.options, iconStyle: iconStyleInp.checked ? 'full' : 'default' };
@@ -151,12 +168,35 @@ batteryChargeHighlightInp.addEventListener('input', () => {
     batteryChargeHighlight: batteryChargeHighlightInp.checked,
   };
 });
+const trackPulseInp = document.getElementById('track-pulse') as HTMLInputElement;
+trackPulseInp.addEventListener('input', () => {
+  el.options = { ...el.options, trackPulse: trackPulseInp.checked };
+});
+// curveBend behaves like a corner radius (0 = sharp 90° corner, 2.5 = a
+// plain direct line — see core.ts's applyCurveBend()) — the *slider*
+// itself, though, holds a plain 0..1 position, not curveBend directly (see
+// index.html's own comment on the input element). A quadratic mapping
+// (exponent 2) gives noticeably finer drag resolution near curveBend=0
+// (small slider movements there change curveBend only a little) than near
+// its direct-line max (the same slider movement there sweeps a much larger
+// curveBend range) — close to what's normally meant by a "logarithmic"
+// control for this kind of bounded 0..max parameter.
+export const CURVE_BEND_MAX = 2.5;
+const CURVE_BEND_SLIDER_EXPONENT = 2;
+export function sliderToCurveBend(x: number): number {
+  return CURVE_BEND_MAX * Math.pow(x, CURVE_BEND_SLIDER_EXPONENT);
+}
+export function curveBendToSlider(bend: number): number {
+  return Math.pow(bend / CURVE_BEND_MAX, 1 / CURVE_BEND_SLIDER_EXPONENT);
+}
+
 const curveBendInp = document.getElementById('curve-bend') as HTMLInputElement;
 const vCurveBend = document.getElementById('v-curve-bend') as HTMLElement;
-vCurveBend.textContent = `${curveBendInp.value}×`;
+vCurveBend.textContent = `${sliderToCurveBend(Number(curveBendInp.value)).toFixed(2)}×`;
 curveBendInp.addEventListener('input', () => {
-  vCurveBend.textContent = `${curveBendInp.value}×`;
-  el.options = { ...el.options, curveBend: Number(curveBendInp.value) };
+  const bend = sliderToCurveBend(Number(curveBendInp.value));
+  vCurveBend.textContent = `${bend.toFixed(2)}×`;
+  el.options = { ...el.options, curveBend: bend };
 });
 const dotCountInp = document.getElementById('dot-count') as HTMLInputElement;
 const vDotCount = document.getElementById('v-dot-count') as HTMLElement;
@@ -182,6 +222,7 @@ columnGapInp.addEventListener('input', () => {
 export {
   iconStyleInp,
   batteryChargeHighlightInp,
+  trackPulseInp,
   curveBendInp,
   vCurveBend,
   dotCountInp,
