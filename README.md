@@ -9,6 +9,7 @@ slots** — with dots whose speed is proportional to the actual power.
 
 [![npm](https://img.shields.io/npm/v/powerflow?color=cb3837&logo=npm)](https://www.npmjs.com/package/powerflow)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/powerflow?label=min%2Bgzip)](https://bundlephobia.com/package/powerflow)
+[![CI](https://github.com/mihaitom/power-flow/actions/workflows/ci.yml/badge.svg)](https://github.com/mihaitom/power-flow/actions/workflows/ci.yml)
 [![zero deps](https://img.shields.io/badge/dependencies-0%20runtime-brightgreen)](#)
 [![license](https://img.shields.io/npm/l/powerflow?color=blue)](./LICENSE)
 
@@ -80,6 +81,12 @@ crisp scalable vectors; no runtime framework dependency.
   (circle, triangle, bolt, chevron, spark), multiple evenly-spaced dots per
   flow, and adjustable curve bend are all opt-in via
   `options.iconStyle`/`options.dotShape`/`options.dotCount`/`options.curveBend`.
+- **Localized numbers** — `options.locale` switches decimal/grouping separators
+  (`3,2 kW` for `'de-DE'`), or take full control with `options.formatPower`.
+- **Screen-reader friendly** — the diagram announces a summary of the current
+  readings, customizable via `options.ariaLabel`.
+- **Pauses off screen** — animations stop while the diagram is scrolled out of
+  view, so dashboards with several diagrams stay light on CPU.
 - **Tiny & isolated** — zero runtime deps (see the min+gzip badge above for the
   current size), shadow DOM so its styles never leak into your app.
 
@@ -209,6 +216,9 @@ leak into your app.
 | --------- | ---------------------------- | -------------------------------------------------------------------- |
 | `data`    | `FlowData`                   | Live power readings (watts).                                         |
 | `options` | `Partial<PowerFlowSettings>` | Colors, labels, icons, topology and presentation tuning — see below. |
+
+Importing the package registers `<power-flow>` automatically. To use another tag
+name (in addition), call `definePowerFlow('energy-flow')`.
 
 ### `PowerFlowSettings` (the `options` object)
 
@@ -604,8 +614,9 @@ solar→home line.
 ```bash
 npm install
 npm run dev           # playground at localhost:5173 — sliders, test cases, simulate day
-npm test               # unit tests (vitest) for the flow-allocation math
-npm run test:watch     # same, in watch mode
+npm test              # unit + DOM tests (vitest, happy-dom)
+npm run test:watch    # same, in watch mode
+npm run format        # format everything with Prettier (format:check to only check)
 
 npm run build         # build:lib + build:site
 npm run build:lib     # → dist/      publishable library (JS bundles + .d.ts)
