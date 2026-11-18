@@ -7,7 +7,7 @@ Reconstructed from git history for versions that predate this file — dates are
 the release commit's date, entries are grouped by what they mean for consumers
 of the package rather than a raw commit log.
 
-## [Unreleased]
+## [1.3.0] — 2026-11-18
 
 ### Added
 
