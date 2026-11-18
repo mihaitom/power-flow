@@ -1,0 +1,6 @@
+contact_links:
+  - name: Live playground
+    url: https://mihaitom.github.io/power-flow/
+    about:
+      Try data and options interactively — and copy a link to your exact setup
+      to paste into an issue.
