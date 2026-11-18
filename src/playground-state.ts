@@ -149,6 +149,24 @@ nodeShapeTabsEl.querySelectorAll('button').forEach((b) => {
   });
 });
 
+// '' = no `locale` option at all (the original fixed number format).
+export const LOCALES = ['', 'en-US', 'de-DE', 'fr-FR'] as const;
+export let currentLocale: (typeof LOCALES)[number] = '';
+const localeTabsEl = document.getElementById('locale-tabs') as HTMLElement;
+export function setLocale(locale: (typeof LOCALES)[number]) {
+  currentLocale = locale;
+  localeTabsEl.querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('on', (b as HTMLElement).dataset.locale === locale);
+  });
+  el.options = { ...el.options, locale: locale || undefined };
+}
+localeTabsEl.querySelectorAll('button').forEach((b) => {
+  b.addEventListener('click', () => {
+    setLocale((b as HTMLElement).dataset.locale as (typeof LOCALES)[number]);
+    notifyStateChange();
+  });
+});
+
 const iconStyleInp = document.getElementById(
   'icon-style-full',
 ) as HTMLInputElement;

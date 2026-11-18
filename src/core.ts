@@ -1,4 +1,5 @@
 import type {
+  FlowData,
   FlowColors,
   FlowLabels,
   FlowIcons,
@@ -15,6 +16,7 @@ import {
   DEFAULT_TOPOLOGY,
 } from './defaults';
 import { computeFlowAllocation } from './flow-allocation';
+import { formatWatts, formatPercent, describeFlow } from './format';
 import type { RowLayout, ColumnLayout } from './skeleton';
 import {
   CSS,
@@ -96,12 +98,6 @@ interface DotFlowState {
   phase: number; // 0..1, shared travel position before per-marker spacing
   maxDots: number; // this leg's own cap on top of options.dotCount — see DOTS
   markers: DotMarker[];
-}
-
-function formatWatts(watts: number): string {
-  return Math.abs(watts) >= 1000
-    ? `${(watts / 1000).toFixed(1)} kW`
-    : `${Math.round(watts)} W`;
 }
 
 /** Translucent fill derived from a node's accent color. `pct` is how much of
@@ -219,6 +215,10 @@ export class PowerFlow {
   private columnGap = DEFAULT_COLUMN_GAP;
   private batteryChargeHighlight = true;
   private trackPulse = false;
+  private locale: string | undefined = undefined;
+  private formatPowerFn: ((watts: number) => string) | undefined = undefined;
+  private ariaLabel: string | ((data: FlowData) => string) | undefined =
+    undefined;
   // Tracks whether the consumer2/batteryLoad2 slot conflict was already active
   // last render, so the console warning fires once per transition into the
   // conflicting state rather than on every `update()` call.
@@ -234,6 +234,10 @@ export class PowerFlow {
   private dots: Record<string, DotFlowState> = {};
   private raf = 0;
   private lastTime = 0;
+  // The animation loop only runs while the host is on screen (see
+  // observeVisibility()) — `running` tracks whether a frame is scheduled.
+  private running = false;
+  private visibilityObserver: IntersectionObserver | null = null;
 
   // Battery charge/discharge comet — the exact same continuously-
   // accumulated-phase technique as `dots` above (see that comment) and for
@@ -259,9 +263,49 @@ export class PowerFlow {
     this.initDots();
     this.initBatteryComet();
     this.cacheIconLayouts();
+    this.svg.setAttribute('role', 'img');
     this.update(options);
+    this.startLoop();
+    this.observeVisibility(host);
+  }
+
+  private startLoop() {
+    if (this.running) return;
+    this.running = true;
+    // Fresh timestamp, so the first frame after resuming doesn't advance by
+    // however long the loop was paused.
     this.lastTime = performance.now();
     this.raf = requestAnimationFrame(this.tick);
+  }
+
+  private stopLoop() {
+    if (!this.running) return;
+    this.running = false;
+    cancelAnimationFrame(this.raf);
+  }
+
+  // Pauses every animation — the JS-driven dots/battery comet and the CSS
+  // track pulse alike — while the diagram is scrolled out of view or
+  // otherwise not rendered, so off-screen instances (e.g. further down a
+  // dashboard) don't burn CPU. Browsers already throttle requestAnimationFrame
+  // in background tabs; this covers the visible-tab-but-off-screen case.
+  // Without IntersectionObserver (very old browsers, non-DOM test
+  // environments) the loop simply always runs, as before.
+  private observeVisibility(host: HTMLElement) {
+    if (typeof IntersectionObserver === 'undefined') return;
+    this.visibilityObserver = new IntersectionObserver((entries) => {
+      const visible = entries[entries.length - 1].isIntersecting;
+      this.svg.classList.toggle('paused', !visible);
+      if (visible) this.startLoop();
+      else this.stopLoop();
+    });
+    this.visibilityObserver.observe(host);
+  }
+
+  private fmt(watts: number): string {
+    return this.formatPowerFn
+      ? this.formatPowerFn(watts)
+      : formatWatts(watts, this.locale);
   }
 
   private cacheRefs() {
@@ -944,7 +988,7 @@ export class PowerFlow {
         );
       }
     }
-    this.raf = requestAnimationFrame(this.tick);
+    if (this.running) this.raf = requestAnimationFrame(this.tick);
   };
 
   /** Re-render with new data / colors / labels / icons / speedScale. Cheap to call frequently. */
@@ -1005,6 +1049,15 @@ export class PowerFlow {
     if (settings?.trackPulse !== undefined) {
       this.trackPulse = settings.trackPulse;
     }
+    // Unlike the fields above, these three default to `undefined` — so an
+    // explicitly present-but-undefined key (as the <power-flow> element
+    // passes when its options no longer include one) resets them, while an
+    // absent key keeps the current value.
+    if (settings && 'locale' in settings) this.locale = settings.locale;
+    if (settings && 'formatPower' in settings)
+      this.formatPowerFn = settings.formatPower;
+    if (settings && 'ariaLabel' in settings)
+      this.ariaLabel = settings.ariaLabel;
     this.svg.classList.toggle('track-pulse', this.trackPulse);
     this.applyLayout();
     this.applyNodeShape();
@@ -1244,7 +1297,7 @@ export class PowerFlow {
     if (hasSolar) {
       this.el['n-solar'].classList.toggle('dim', solarWatts === 0);
       this.paintNode('solar', colors.solar);
-      this.text('t-solar-val', formatWatts(solarWatts));
+      this.text('t-solar-val', this.fmt(solarWatts));
       this.labelText('t-solar-lbl', labels.solar);
     }
 
@@ -1275,12 +1328,12 @@ export class PowerFlow {
     // uniform filled ink there too (paintNode already put the shadow class
     // on this element via ICON_LAYOUT_NODES' 'grid' texts entry).
     gridVal.style.fill = this.nodeStyle === 'filled' ? FILLED_INK : gridColor;
-    gridVal.textContent = `${gridWatts >= 0 ? '→' : '←'} ${formatWatts(Math.abs(gridWatts))}`;
+    gridVal.textContent = `${gridWatts >= 0 ? '→' : '←'} ${this.fmt(Math.abs(gridWatts))}`;
     this.labelText('t-grid-lbl', labels.grid);
 
     // ── Home node ──
     this.paintNode('home', colors.home);
-    this.text('t-home-val', formatWatts(loadWatts));
+    this.text('t-home-val', this.fmt(loadWatts));
     this.labelText('t-home-lbl', labels.home);
 
     // ── Battery node ── (colour follows charge/discharge, like the grid node)
@@ -1291,13 +1344,13 @@ export class PowerFlow {
       const soc = this.el['t-bat-soc'] as SVGTextElement;
       soc.style.display = data.batterySoc != null ? '' : 'none';
       if (data.batterySoc != null)
-        soc.textContent = `${Math.round(data.batterySoc)} %`;
+        soc.textContent = formatPercent(data.batterySoc, this.locale);
       const watts = this.el['t-bat-watts'] as SVGTextElement;
       // Same accent-colored-value pattern (and same `filled`-mode fixup) as
       // the grid node's value text above.
       watts.style.fill =
         this.nodeStyle === 'filled' ? FILLED_INK : batteryColor;
-      watts.textContent = `${batteryWatts > 0 ? '↓' : '↑'} ${formatWatts(Math.abs(batteryWatts))}`;
+      watts.textContent = `${batteryWatts > 0 ? '↓' : '↑'} ${this.fmt(Math.abs(batteryWatts))}`;
       this.labelText('t-bat-lbl', labels.battery);
       // SoC inner ring — progress arc from 12 o'clock clockwise. Same
       // `filled`-mode fixup as the value texts above: unlike the home/grid
@@ -1323,7 +1376,7 @@ export class PowerFlow {
     if (hasConsumer1) {
       this.el['n-consumer1'].classList.toggle('dim', consumer1Watts === 0);
       this.paintNode('c1', colors.consumer1);
-      this.text('t-c1-val', formatWatts(consumer1Watts));
+      this.text('t-c1-val', this.fmt(consumer1Watts));
       this.labelText('t-c1-lbl', labels.consumer1);
     }
 
@@ -1331,7 +1384,7 @@ export class PowerFlow {
     if (hasConsumer2) {
       this.el['n-consumer2'].classList.toggle('dim', consumer2Watts === 0);
       this.paintNode('c2', colors.consumer2);
-      this.text('t-c2-val', formatWatts(consumer2Watts));
+      this.text('t-c2-val', this.fmt(consumer2Watts));
       this.labelText('t-c2-lbl', labels.consumer2);
     }
 
@@ -1339,7 +1392,7 @@ export class PowerFlow {
     if (hasConsumer3) {
       this.el['n-consumer3'].classList.toggle('dim', consumer3Watts === 0);
       this.paintNode('c3', colors.consumer3);
-      this.text('t-c3-val', formatWatts(consumer3Watts));
+      this.text('t-c3-val', this.fmt(consumer3Watts));
       this.labelText('t-c3-lbl', labels.consumer3);
     }
 
@@ -1347,7 +1400,7 @@ export class PowerFlow {
     if (hasConsumer4) {
       this.el['n-consumer4'].classList.toggle('dim', consumer4Watts === 0);
       this.paintNode('c4', colors.consumer4);
-      this.text('t-c4-val', formatWatts(consumer4Watts));
+      this.text('t-c4-val', this.fmt(consumer4Watts));
       this.labelText('t-c4-lbl', labels.consumer4);
     }
 
@@ -1358,7 +1411,7 @@ export class PowerFlow {
         batteryLoad1Watts === 0,
       );
       this.paintNode('bl1', colors.batteryLoad1);
-      this.text('t-bl1-val', formatWatts(batteryLoad1Watts));
+      this.text('t-bl1-val', this.fmt(batteryLoad1Watts));
       this.labelText('t-bl1-lbl', labels.batteryLoad1);
     }
 
@@ -1369,7 +1422,7 @@ export class PowerFlow {
         batteryLoad2Watts === 0,
       );
       this.paintNode('bl2', colors.batteryLoad2);
-      this.text('t-bl2-val', formatWatts(batteryLoad2Watts));
+      this.text('t-bl2-val', this.fmt(batteryLoad2Watts));
       this.labelText('t-bl2-lbl', labels.batteryLoad2);
     }
 
@@ -1378,11 +1431,29 @@ export class PowerFlow {
     if (hasSlotConflict) {
       this.paintNode('conflict', PowerFlow.CONFLICT_COLOR);
     }
+
+    // ── Accessible name ── role="img" makes screen readers treat the whole
+    // SVG as one image (instead of reading out every value/label fragment
+    // in DOM order), so it needs a name that conveys the readings.
+    const ariaLabel =
+      typeof this.ariaLabel === 'function'
+        ? this.ariaLabel(data)
+        : (this.ariaLabel ??
+          describeFlow(
+            data,
+            labels,
+            (w) => this.fmt(w),
+            (pct) => formatPercent(pct, this.locale),
+          ));
+    if (this.svg.getAttribute('aria-label') !== ariaLabel)
+      this.svg.setAttribute('aria-label', ariaLabel);
   }
 
   /** Remove the rendered diagram from its host and stop the animation loop. */
   destroy() {
-    cancelAnimationFrame(this.raf);
+    this.stopLoop();
+    this.visibilityObserver?.disconnect();
+    this.visibilityObserver = null;
     for (const s of Object.values(this.dots)) {
       for (const m of s.markers) if (m.hideTimer) clearTimeout(m.hideTimer);
     }

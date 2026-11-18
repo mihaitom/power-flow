@@ -111,14 +111,15 @@ export interface FlowIcons {
 export type NodeStyle = 'soft' | 'tonal' | 'outline' | 'filled';
 
 /** Shape of every node's own background/ring — `'circle'` (default, the
- *  original look), `'square'` (sharp corners), or `'hexagon'`. Every node
- *  keeps the same 104px footprint either way, so track routing/fan-out is
- *  unaffected. `'circle'`<->`'square'` morphs smoothly (both are the same
- *  element with an animated corner radius); transitioning to/from
- *  `'hexagon'` snaps instantly instead (a different clipping mechanism —
- *  see applyNodeShape() in core.ts). The coverage/SoC progress rings drawn
- *  on top of solar/grid/home/battery follow `'circle'`/`'square'` but stay
- *  circular for `'hexagon'`. */
+ *  original look), `'square'` (sharp corners), or `'hexagon'` (a true
+ *  regular hexagon with equal side lengths, flat top/bottom).
+ *  `'circle'` and `'square'` share the same 104×104px footprint;
+ *  `'hexagon'` keeps the 104px height but is wider (~120px), so tracks
+ *  end slightly further out and the diagram's `viewBox` widens to fit.
+ *  `'circle'`<->`'square'` morphs smoothly; switching to/from `'hexagon'`
+ *  snaps instantly instead. The coverage, SoC and battery charge-highlight
+ *  rings drawn on top of solar/grid/home/battery follow the selected
+ *  shape. */
 export type NodeShape = 'circle' | 'square' | 'hexagon';
 
 /** Shape of the animated flow dots — see `PowerFlowSettings.dotShape`. */
@@ -136,10 +137,10 @@ export interface PowerFlowSettings {
   speedScale: number;
   /** How each node's background/ring/icon/text are painted. Default `'soft'`. */
   nodeStyle: NodeStyle;
-  /** Shape of every node's own background/ring. `'circle'` (default) is the
-   *  original look; `'square'` gives every node sharp corners instead.
-   *  Every node keeps the same 104px footprint either way, so track
-   *  routing/fan-out is unaffected — only the corner radius changes. */
+  /** Shape of every node's own background/ring: `'circle'` (default, the
+   *  original look), `'square'` (sharp corners) or `'hexagon'` (regular
+   *  hexagon, slightly wider than the other two). The coverage/SoC/
+   *  charge-highlight rings follow suit — see `NodeShape` for details. */
   nodeShape: NodeShape;
   /** `'full'` draws each node's icon large behind the value/label text
    *  (dimmed, as a background) instead of small above it. Default `'default'`. */
@@ -198,6 +199,24 @@ export interface PowerFlowSettings {
    *  higher-load flow pulses faster). Default `false` — the original,
    *  always-shipped look (dots only, no track pulse). */
   trackPulse: boolean;
+  /** BCP 47 locale tag (e.g. `'de-DE'`) for the displayed numbers' decimal
+   *  and grouping separators — `'de-DE'` shows `3,2 kW` instead of
+   *  `3.2 kW`. Default unset: the original fixed format (`3.2 kW`,
+   *  `800 W`). Ignored for power values when `formatPower` is set. */
+  locale?: string;
+  /** Custom formatter for every displayed power value — replaces the
+   *  built-in `800 W` / `3.2 kW` formatting (and `locale`) entirely.
+   *  Receives a non-negative wattage: for grid and battery the direction
+   *  arrow is drawn separately, so they get the absolute value. Also used
+   *  in the diagram's screen-reader description. */
+  formatPower?: (watts: number) => string;
+  /** Accessible name of the diagram for screen readers. Default: an
+   *  automatically generated English summary of the current readings,
+   *  built from `labels`, e.g. `"Power flow. Solar: 3.2 kW; Grid:
+   *  exporting 800 W; Home: 2.4 kW."`. Pass a string for a fixed name, or
+   *  a function to build your own (e.g. translated) summary from the
+   *  current `data` — it's called on every update. */
+  ariaLabel?: string | ((data: FlowData) => string);
 }
 
 export interface PowerFlowOptions {

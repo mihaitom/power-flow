@@ -1,4 +1,5 @@
 import { PowerFlow } from './core';
+import { DEFAULT_SETTINGS } from './defaults';
 import type { FlowData, PowerFlowSettings } from './types';
 
 // `class X extends HTMLElement` evaluates `HTMLElement` the moment this
@@ -26,6 +27,11 @@ const HTMLElementBase: typeof HTMLElement =
  * For plain HTML you can also pass JSON via attributes:
  *
  *   <power-flow data='{"solar":3200,"grid":-800,"load":2400}'></power-flow>
+ *
+ * `options` is applied as a whole: a field missing from a new `options`
+ * value goes back to its default rather than keeping an earlier value.
+ * Removing the `data`/`options` attribute (or setting the property to
+ * `undefined`) resets it to its default.
  */
 export class PowerFlowElement extends HTMLElementBase {
   static get observedAttributes() {
@@ -33,11 +39,11 @@ export class PowerFlowElement extends HTMLElementBase {
   }
 
   private pf: PowerFlow | null = null;
-  private _data: FlowData = { solar: 0, grid: 0, load: 0 };
+  private _data: FlowData = emptyData();
   private _options: Partial<PowerFlowSettings> | undefined;
 
   set data(value: FlowData) {
-    this._data = value;
+    this._data = value ?? emptyData();
     this.render();
   }
   get data(): FlowData {
@@ -66,7 +72,14 @@ export class PowerFlowElement extends HTMLElementBase {
     _old: string | null,
     value: string | null,
   ) {
-    if (value == null) return;
+    if (value == null) {
+      // Attribute removed — fall back to defaults rather than silently
+      // keeping the last value it held.
+      if (name === 'data') this._data = emptyData();
+      else if (name === 'options') this._options = undefined;
+      this.render();
+      return;
+    }
     try {
       const parsed = JSON.parse(value);
       if (name === 'data') this._data = parsed;
@@ -79,13 +92,23 @@ export class PowerFlowElement extends HTMLElementBase {
 
   private render() {
     if (!this.isConnected) return;
-    const options = { data: this._data, options: this._options };
+    // Spread over the full defaults so that anything the current `options`
+    // leaves out is reset — PowerFlow.update() itself only touches the
+    // fields it's given.
+    const options = {
+      data: this._data,
+      options: { ...DEFAULT_SETTINGS, ...this._options },
+    };
     if (this.pf) {
       this.pf.update(options);
     } else {
       this.pf = new PowerFlow(this, options);
     }
   }
+}
+
+function emptyData(): FlowData {
+  return { solar: 0, grid: 0, load: 0 };
 }
 
 /** Register `<power-flow>` (idempotent). Safe to call multiple times. */

@@ -546,6 +546,11 @@ export const CSS = `
 .track-pulse .track.active {
   animation: pf-track-pulse 1.2s ease-in-out infinite;
 }
+/* Frozen together with the JS animation loop while the diagram is off
+   screen — see observeVisibility() in core.ts. */
+.paused .track.active {
+  animation-play-state: paused;
+}
 @keyframes pf-track-pulse {
   0%, 100% {
     opacity: 0.5;

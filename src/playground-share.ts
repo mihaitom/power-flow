@@ -47,6 +47,9 @@ import {
   setNodeShape,
   currentDotShape,
   setDotShape,
+  currentLocale,
+  setLocale,
+  LOCALES,
 } from './playground-state';
 
 // Consumer-slot keys whose icon/label are only meaningful while the slot's
@@ -251,6 +254,7 @@ function buildSnippet(fw: string): string {
     if (iconStyleInp.checked) optFields.push(`${optInner}iconStyle: "full"`);
     if (currentDotShape !== 'circle')
       optFields.push(`${optInner}dotShape: "${currentDotShape}"`);
+    if (currentLocale) optFields.push(`${optInner}locale: "${currentLocale}"`);
     if (!batteryChargeHighlightInp.checked)
       optFields.push(`${optInner}batteryChargeHighlight: false`);
     if (trackPulseInp.checked) optFields.push(`${optInner}trackPulse: true`);
@@ -468,6 +472,7 @@ interface ShareState {
   nodeShape?: string;
   iconStyle?: true;
   dotShape?: string;
+  locale?: string;
   batteryChargeHighlight?: false;
   trackPulse?: true;
   curveBend?: number;
@@ -519,6 +524,7 @@ function encodeState(): ShareState {
   if (currentNodeShape !== 'circle') state.nodeShape = currentNodeShape;
   if (iconStyleInp.checked) state.iconStyle = true;
   if (currentDotShape !== 'circle') state.dotShape = currentDotShape;
+  if (currentLocale) state.locale = currentLocale;
   if (!batteryChargeHighlightInp.checked) state.batteryChargeHighlight = false;
   if (trackPulseInp.checked) state.trackPulse = true;
   const curveBendState = sliderToCurveBend(+curveBendInp.value);
@@ -654,6 +660,7 @@ copyLinkBtn.addEventListener('click', () => {
   )
     setDotShape(s.dotShape);
   else setDotShape('circle');
+  setLocale(LOCALES.find((l) => l === s.locale) ?? '');
   batteryChargeHighlightInp.checked = s.batteryChargeHighlight ?? true;
   el.options = {
     ...el.options,

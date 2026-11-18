@@ -24,6 +24,7 @@ import {
   setNodeStyle,
   setNodeShape,
   setDotShape,
+  setLocale,
   speedInp,
   iconStyleInp,
   batteryChargeHighlightInp,
@@ -88,6 +89,7 @@ function resetCheckbox(input: HTMLInputElement) {
     setNodeShape('circle');
     resetCheckbox(iconStyleInp);
     setDotShape('circle');
+    setLocale('');
     resetCheckbox(batteryChargeHighlightInp);
     resetCheckbox(trackPulseInp);
     resetInput(curveBendInp);

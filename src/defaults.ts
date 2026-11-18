@@ -5,7 +5,14 @@ import {
   mdiBatteryMedium,
   mdiPowerSocket,
 } from '@mdi/js';
-import type { FlowColors, FlowLabels, FlowIcons, FlowTopology } from './types';
+import type {
+  FlowColors,
+  FlowLabels,
+  FlowIcons,
+  FlowTopology,
+  PowerFlowSettings,
+} from './types';
+import { DEFAULT_ROW_GAP, DEFAULT_COLUMN_GAP } from './skeleton';
 
 export const DEFAULT_COLORS: FlowColors = {
   solar: '#fcd34d', // warm amber-yellow — sun
@@ -57,4 +64,32 @@ export const DEFAULT_TOPOLOGY: FlowTopology = {
   solarToBattery: true,
   batteryToHome: true,
   batteryToGrid: true,
+};
+
+/** Every `PowerFlowSettings` field at its default. The `<power-flow>`
+ *  element spreads its `options` over this, so a field left out of a new
+ *  `options` object returns to its default instead of keeping whatever an
+ *  earlier `options` value set. `colors`/`labels`/`icons`/`topology` are
+ *  empty here because the renderer already fills their gaps from the
+ *  DEFAULT_* objects above; the optional fields are listed explicitly as
+ *  `undefined` so they're reset too. */
+export const DEFAULT_SETTINGS: PowerFlowSettings = {
+  colors: {},
+  labels: {},
+  icons: {},
+  topology: {},
+  speedScale: 1,
+  nodeStyle: 'soft',
+  nodeShape: 'circle',
+  iconStyle: 'default',
+  dotShape: 'circle',
+  dotCount: 1,
+  curveBend: 1,
+  rowGap: DEFAULT_ROW_GAP,
+  columnGap: DEFAULT_COLUMN_GAP,
+  batteryChargeHighlight: true,
+  trackPulse: false,
+  locale: undefined,
+  formatPower: undefined,
+  ariaLabel: undefined,
 };

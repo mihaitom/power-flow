@@ -7,6 +7,27 @@ Reconstructed from git history for versions that predate this file — dates are
 the release commit's date, entries are grouped by what they mean for consumers
 of the package rather than a raw commit log.
 
+## [Unreleased]
+
+### Added
+
+- `locale` option for locale-aware number formatting, e.g. `'de-DE'` shows
+  `3,2 kW` instead of `3.2 kW`
+- `formatPower` option to fully customize how power values are displayed
+- Screen-reader support: the diagram now has an accessible name summarizing the
+  current readings, customizable via the new `ariaLabel` option
+- Animations pause automatically while the diagram is off screen, saving CPU on
+  pages with several diagrams
+- Playground: number format selector
+
+### Fixed
+
+- Setting `options` on `<power-flow>` now replaces the previous options as
+  documented — fields left out return to their defaults instead of keeping an
+  earlier value
+- Removing the `data` or `options` attribute from `<power-flow>` now resets it
+  to its default instead of keeping the last value
+
 ## [1.2.0] — 2026-08-02
 
 ### Added

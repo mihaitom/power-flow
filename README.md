@@ -229,10 +229,20 @@ leak into your app.
 | `columnGap`              | `number`                                                   | Horizontal spacing (px) between adjacent columns. Default `145`. Clamped to `110–180`.                                                                                                                                             |
 | `batteryChargeHighlight` | `boolean`                                                  | Whether the battery's SoC ring shows an animated highlight while charging/discharging. Default `true`; set `false` for a plain static ring.                                                                                        |
 | `trackPulse`             | `boolean`                                                  | Whether an actively-carrying track pulses in brightness on top of its traveling dot(s), tempo scaled to that flow's own speed. Default `false`.                                                                                    |
+| `locale`                 | `string`                                                   | BCP 47 locale for number separators, e.g. `'de-DE'` → `3,2 kW`. Default unset (`3.2 kW`).                                                                                                                                          |
+| `formatPower`            | `(watts: number) => string`                                | Custom formatter for every displayed power value; replaces the built-in formatting and `locale`.                                                                                                                                   |
+| `ariaLabel`              | `string \| ((data: FlowData) => string)`                   | Accessible name for screen readers. Default: an auto-generated English summary of the current readings.                                                                                                                            |
 
 `options` is set as a whole (`pf.options = { iconStyle: 'full' }`) rather than
-merged automatically — pass along whatever previous fields you want to keep,
-e.g. `pf.options = { ...pf.options, iconStyle: 'full' }`.
+merged automatically — any field left out goes back to its default, so pass
+along whatever previous fields you want to keep, e.g.
+`pf.options = { ...pf.options, iconStyle: 'full' }`. Removing the `data` or
+`options` attribute (or setting the property to `undefined`) resets it to its
+default.
+
+The vanilla `pf.update({ data, options })` (see
+[Framework usage](#framework-usage)) instead only changes the fields you pass —
+convenient for sending just new `data` on every update.
 
 ### `FlowData`
 
@@ -516,6 +526,47 @@ The pulse tempo scales with that flow's own speed, the same way dot speed does,
 so a higher-load flow pulses faster than a lightly-loaded one. See the first GIF
 at the top of this README, which has it enabled across several simultaneously
 active flows at different loads.
+
+### `locale` / `formatPower`
+
+```ts
+pf.options = { ...pf.options, locale: 'de-DE' }; // 3,2 kW · 800 W
+pf.options = {
+  ...pf.options,
+  formatPower: (w) => `${(w / 1000).toFixed(2)} kW`, // always kW, 2 decimals
+};
+```
+
+Without either, values show as `800 W` below 1 kW and `3.2 kW` (one decimal)
+above. `locale` keeps that scheme and only switches the decimal/grouping
+separators. `formatPower` replaces it entirely; it receives a non-negative value
+in watts — grid and battery get the absolute value, since their direction arrow
+is drawn separately. An unsupported `locale` falls back to the default format
+with a console warning.
+
+### Accessibility (`ariaLabel`)
+
+The diagram is exposed to screen readers as a single image whose accessible name
+summarizes the current readings, e.g. _"Power flow. Solar: 3.2 kW; Grid:
+exporting 800 W; Home: 2.4 kW."_ — built from your `labels` and the configured
+number format, updated with every `data` change. The connecting words
+("importing", "charging", …) are English; for another language, or any other
+wording, pass a function:
+
+```ts
+pf.options = {
+  ...pf.options,
+  ariaLabel: (d) => `Energiefluss: Haus ${d.load} W, Netz ${d.grid} W`,
+};
+```
+
+A plain string sets a fixed name instead.
+
+### Off-screen pausing
+
+All animations pause automatically while the diagram is scrolled out of view (or
+otherwise not rendered) and resume where they left off once it's visible again,
+so several diagrams on a long dashboard only animate the ones on screen.
 
 ## How the flows are computed
 
