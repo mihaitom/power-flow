@@ -111,10 +111,19 @@ function emptyData(): FlowData {
   return { solar: 0, grid: 0, load: 0 };
 }
 
-/** Register `<power-flow>` (idempotent). Safe to call multiple times. */
+let baseClassRegistered = false;
+
+/** Register the element under `tagName` (default `<power-flow>`).
+ *  Idempotent — safe to call multiple times. Also works for additional tag
+ *  names next to the automatically registered `<power-flow>`. */
 export function definePowerFlow(tagName = 'power-flow'): void {
   if (typeof customElements === 'undefined') return;
-  if (!customElements.get(tagName)) {
-    customElements.define(tagName, PowerFlowElement);
-  }
+  if (customElements.get(tagName)) return;
+  // A constructor can only be registered under one name, so every name after
+  // the first gets its own trivial subclass.
+  customElements.define(
+    tagName,
+    baseClassRegistered ? class extends PowerFlowElement {} : PowerFlowElement,
+  );
+  baseClassRegistered = true;
 }

@@ -27,6 +27,8 @@ of the package rather than a raw commit log.
   earlier value
 - Removing the `data` or `options` attribute from `<power-flow>` now resets it
   to its default instead of keeping the last value
+- `definePowerFlow('my-tag')` now registers the element under an additional tag
+  name instead of throwing an error
 
 ## [1.2.0] — 2026-08-02
 
