@@ -13,7 +13,7 @@ import {
   TOPOLOGY_KEYS,
   fmt,
   notifyStateChange,
-} from './playground-dom';
+} from './playground-dom.js';
 
 export function apply() {
   (document.getElementById('v-solar') as HTMLElement).textContent = fmt(

@@ -14,9 +14,9 @@ import {
   mdiToolbox,
   mdiFridgeIndustrial,
 } from '@mdi/js';
-import { DEFAULT_LABELS } from './defaults';
-import { el } from './playground-dom';
-import { currentIcons, DEFAULT_ICONS } from './playground-icons';
+import { DEFAULT_LABELS } from './defaults.js';
+import { el } from './playground-dom.js';
+import { currentIcons, DEFAULT_ICONS } from './playground-icons.js';
 
 // Demonstrates that consumer1/consumer2/consumer3/consumer4/batteryLoad1/
 // batteryLoad2 aren't specifically about EV charging — they're generic

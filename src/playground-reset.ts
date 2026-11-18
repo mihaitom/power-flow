@@ -17,7 +17,7 @@ import {
   topoInp,
   TOPOLOGY_KEYS,
   notifyStateChange,
-} from './playground-dom';
+} from './playground-dom.js';
 import {
   updateLoadMin,
   updateGrid,
@@ -33,11 +33,11 @@ import {
   dotCountInp,
   rowGapInp,
   columnGapInp,
-} from './playground-state';
-import { stopSim } from './playground-simulate';
-import { resetColors } from './playground-colors';
-import { resetStructuralIcons } from './playground-icons';
-import { resetAppliances } from './playground-appliances';
+} from './playground-state.js';
+import { stopSim } from './playground-simulate.js';
+import { resetColors } from './playground-colors.js';
+import { resetStructuralIcons } from './playground-icons.js';
+import { resetAppliances } from './playground-appliances.js';
 
 // Fires each control's own `input` listener rather than re-deriving what it
 // does to `el.options`/text labels — keeps this module from drifting out of

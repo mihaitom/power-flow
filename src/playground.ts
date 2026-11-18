@@ -2,13 +2,13 @@
 // every playground feature area (each module attaches its own DOM listeners
 // as a side effect of being imported — see playground-dom.ts for the shared
 // element references they all read from).
-import './index';
-import './playground-theme';
-import './playground-colors';
-import './playground-icons';
-import './playground-appliances';
-import './playground-state';
-import './playground-simulate';
-import './playground-testcases';
-import './playground-reset';
-import './playground-share';
+import './index.js';
+import './playground-theme.js';
+import './playground-colors.js';
+import './playground-icons.js';
+import './playground-appliances.js';
+import './playground-state.js';
+import './playground-simulate.js';
+import './playground-testcases.js';
+import './playground-reset.js';
+import './playground-share.js';

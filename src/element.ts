@@ -1,6 +1,6 @@
-import { PowerFlow } from './core';
-import { DEFAULT_SETTINGS } from './defaults';
-import type { FlowData, PowerFlowSettings } from './types';
+import { PowerFlow } from './core.js';
+import { DEFAULT_SETTINGS } from './defaults.js';
+import type { FlowData, PowerFlowSettings } from './types.js';
 
 // `class X extends HTMLElement` evaluates `HTMLElement` the moment this
 // module loads — which throws in any environment without a DOM (Node

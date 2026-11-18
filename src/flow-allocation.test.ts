@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { computeFlowAllocation } from './flow-allocation';
-import type { FlowData, FlowTopology } from './types';
+import { computeFlowAllocation } from './flow-allocation.js';
+import type { FlowData, FlowTopology } from './types.js';
 
 const ALL_ON: FlowTopology = {
   solarToHome: true,

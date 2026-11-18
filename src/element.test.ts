@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
-import { definePowerFlow, PowerFlowElement } from './index';
+import { definePowerFlow, PowerFlowElement } from './index.js';
 
 afterEach(() => {
   document.body.innerHTML = '';

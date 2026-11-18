@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createPowerFlow, PowerFlow } from './core';
-import type { FlowData, PowerFlowSettings } from './types';
+import { createPowerFlow, PowerFlow } from './core.js';
+import type { FlowData, PowerFlowSettings } from './types.js';
 
 const instances: PowerFlow[] = [];
 

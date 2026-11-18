@@ -8,16 +8,16 @@ import type {
   NodeStyle,
   NodeShape,
   DotShape,
-} from './types';
+} from './types.js';
 import {
   DEFAULT_COLORS,
   DEFAULT_LABELS,
   DEFAULT_ICONS,
   DEFAULT_TOPOLOGY,
-} from './defaults';
-import { computeFlowAllocation } from './flow-allocation';
-import { formatWatts, formatPercent, describeFlow } from './format';
-import type { RowLayout, ColumnLayout } from './skeleton';
+} from './defaults.js';
+import { computeFlowAllocation } from './flow-allocation.js';
+import { formatWatts, formatPercent, describeFlow } from './format.js';
+import type { RowLayout, ColumnLayout } from './skeleton.js';
 import {
   CSS,
   SKELETON,
@@ -42,7 +42,7 @@ import {
   HEX_HOME_PULLBACK,
   squareRingPoints,
   hexagonRingPoints,
-} from './skeleton';
+} from './skeleton.js';
 
 export type {
   FlowData,
@@ -51,9 +51,9 @@ export type {
   FlowLabels,
   FlowIcons,
   PowerFlowOptions,
-} from './types';
-export type { FlowAllocation } from './flow-allocation';
-export { computeFlowAllocation } from './flow-allocation';
+} from './types.js';
+export type { FlowAllocation } from './flow-allocation.js';
+export { computeFlowAllocation } from './flow-allocation.js';
 
 // One "oriented" (non-'circle') marker shape's pair of elements — the <g>
 // carries position+rotation (JS-set transform attribute every frame), while

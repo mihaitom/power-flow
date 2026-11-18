@@ -8,8 +8,8 @@ import {
   hasC4,
   hasBl1,
   hasBl2,
-} from './playground-dom';
-import { updateGrid } from './playground-state';
+} from './playground-dom.js';
+import { updateGrid } from './playground-state.js';
 
 let timer: ReturnType<typeof setInterval> | null = null;
 const btn = document.getElementById('simulate') as HTMLElement;

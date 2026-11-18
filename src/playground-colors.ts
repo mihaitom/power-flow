@@ -1,4 +1,4 @@
-import { el } from './playground-dom';
+import { el } from './playground-dom.js';
 
 export const colorIds: Record<string, string> = {
   solar: 'c-solar',

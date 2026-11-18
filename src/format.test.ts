@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { describeFlow, formatPercent, formatWatts } from './format';
-import { DEFAULT_LABELS } from './defaults';
+import { describeFlow, formatPercent, formatWatts } from './format.js';
+import { DEFAULT_LABELS } from './defaults.js';
 
 describe('formatWatts', () => {
   it('keeps the original fixed format without a locale', () => {

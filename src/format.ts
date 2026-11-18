@@ -1,4 +1,4 @@
-import type { FlowData, FlowLabels } from './types';
+import type { FlowData, FlowLabels } from './types.js';
 
 /** Formats a non-negative power value for display. */
 export type PowerFormatter = (watts: number) => string;

@@ -11,8 +11,8 @@ import type {
   FlowIcons,
   FlowTopology,
   PowerFlowSettings,
-} from './types';
-import { DEFAULT_ROW_GAP, DEFAULT_COLUMN_GAP } from './skeleton';
+} from './types.js';
+import { DEFAULT_ROW_GAP, DEFAULT_COLUMN_GAP } from './skeleton.js';
 
 export const DEFAULT_COLORS: FlowColors = {
   solar: '#fcd34d', // warm amber-yellow — sun

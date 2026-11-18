@@ -36,15 +36,20 @@
   "unpkg": "./dist/powerflow.umd.cjs",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/powerflow.js",
-      "require": "./dist/powerflow.umd.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/powerflow.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/powerflow.umd.cjs"
+      }
     }
   },
   "scripts": {
     "dev": "vite",
     "build": "npm run build:lib && npm run build:site",
-    "build:lib": "vite build -c vite.config.lib.ts && tsc --declaration --emitDeclarationOnly -p tsconfig.build.json",
+    "build:lib": "vite build -c vite.config.lib.ts && tsc -p tsconfig.build.json && tsc -p tsconfig.build.json --outDir dist/cjs && node -e \"require('fs').writeFileSync('dist/cjs/package.json', JSON.stringify({ type: 'commonjs' }) + '\\n')\"",
     "build:site": "vite build",
     "preview": "vite preview",
     "prepublishOnly": "npm run build:lib",

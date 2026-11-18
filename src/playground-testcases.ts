@@ -12,9 +12,9 @@ import {
   TOPOLOGY_KEYS,
   notifyStateChange,
   type TopologyKey,
-} from './playground-dom';
-import { updateLoadMin, updateGrid, apply } from './playground-state';
-import { stopSim } from './playground-simulate';
+} from './playground-dom.js';
+import { updateLoadMin, updateGrid, apply } from './playground-state.js';
+import { stopSim } from './playground-simulate.js';
 
 interface TestCase {
   label: string;

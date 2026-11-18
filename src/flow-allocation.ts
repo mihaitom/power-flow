@@ -1,4 +1,4 @@
-import type { FlowData, FlowTopology } from './types';
+import type { FlowData, FlowTopology } from './types.js';
 
 /** Every individual flow leg (in watts), decomposed from a `FlowData`
  *  snapshot — see `computeFlowAllocation`. */

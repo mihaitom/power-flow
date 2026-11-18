@@ -19,10 +19,13 @@ import {
   hasBl2,
   topoInp,
   TOPOLOGY_KEYS,
-} from './playground-dom';
-import { cinp, DEFAULT_COLORS, applyColors } from './playground-colors';
-import { currentIcons, DEFAULT_ICONS, ICON_NAMES } from './playground-icons';
-import { currentLabels, APPLIANCE_ICON_NAMES } from './playground-appliances';
+} from './playground-dom.js';
+import { cinp, DEFAULT_COLORS, applyColors } from './playground-colors.js';
+import { currentIcons, DEFAULT_ICONS, ICON_NAMES } from './playground-icons.js';
+import {
+  currentLabels,
+  APPLIANCE_ICON_NAMES,
+} from './playground-appliances.js';
 import {
   updateLoadMin,
   updateGrid,
@@ -50,7 +53,7 @@ import {
   currentLocale,
   setLocale,
   LOCALES,
-} from './playground-state';
+} from './playground-state.js';
 
 // Consumer-slot keys whose icon/label are only meaningful while the slot's
 // own checkbox is on — used to keep the generated `icons`/`labels` snippets

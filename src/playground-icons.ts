@@ -16,7 +16,7 @@ import {
   mdiEvPlugType2,
   mdiPowerSocket,
 } from '@mdi/js';
-import { el } from './playground-dom';
+import { el } from './playground-dom.js';
 
 // Only the four structural nodes shuffle here. consumer1-4/batteryLoad1/
 // batteryLoad2 are owned by playground-appliances.ts instead (see
