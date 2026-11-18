@@ -57,7 +57,12 @@ export const RING_PERIMETER_HEX = 6 * RING_HEX_CIRCUMRADIUS;
 // than merge with it. core.ts's applyRingShape() sets every variant's
 // `display` explicitly instead, synchronously within the constructor
 // before the first paint, so there's no flash of the wrong shape either.
-function ringRect(cx: number, cy: number, id: string, extraAttrs: string): string {
+function ringRect(
+  cx: number,
+  cy: number,
+  id: string,
+  extraAttrs: string,
+): string {
   return `<rect id="${id}" x="${cx - 47}" y="${cy - 47}" width="${RING_SIZE}" height="${RING_SIZE}" rx="47" ry="47" transform="rotate(-90 ${cx} ${cy})" ${extraAttrs} />`;
 }
 
@@ -76,11 +81,21 @@ export function squareRingPoints(cx: number, cy: number, half = 47): string {
     .join(' ');
 }
 
-function ringSquarePolygon(cx: number, cy: number, id: string, extraAttrs: string): string {
+function ringSquarePolygon(
+  cx: number,
+  cy: number,
+  id: string,
+  extraAttrs: string,
+): string {
   return `<polygon id="${id}" points="${squareRingPoints(cx, cy)}" ${extraAttrs} />`;
 }
 
-function ringHexPolygon(cx: number, cy: number, id: string, extraAttrs: string): string {
+function ringHexPolygon(
+  cx: number,
+  cy: number,
+  id: string,
+  extraAttrs: string,
+): string {
   return `<polygon id="${id}" points="${hexagonRingPoints(cx, cy, RING_HEX_APOTHEM)}" ${extraAttrs} />`;
 }
 
@@ -116,7 +131,10 @@ export const BATTERY_COMET_LAYERS: { id: string; delay: number }[] = [
   { id: 'bat-charge-core', delay: 0 },
   ...Array.from({ length: BAT_COMET_TAIL_SEGMENTS }, (_, i) => {
     const n = i + 1;
-    return { id: `bat-charge-tail-${n}`, delay: (n * BAT_COMET_TAIL_STEP_DEG) / 360 };
+    return {
+      id: `bat-charge-tail-${n}`,
+      delay: (n * BAT_COMET_TAIL_STEP_DEG) / 360,
+    };
   }),
 ];
 
@@ -144,9 +162,24 @@ function batteryCometMarkup(cx: number, cy: number): string {
   // after construction.
   const arc = (id: string, extraAttrs: string) =>
     [
-      ringRect(cx, cy, id, `stroke-dasharray="${BAT_COMET_DASHARRAY}" ${extraAttrs}`),
-      ringSquarePolygon(cx, cy, `${id}-square`, `stroke-dasharray="${cometDasharray(RING_PERIMETER_SQUARE)}" ${extraAttrs}`),
-      ringHexPolygon(cx, cy, `${id}-hex`, `stroke-dasharray="${cometDasharray(RING_PERIMETER_HEX)}" ${extraAttrs}`),
+      ringRect(
+        cx,
+        cy,
+        id,
+        `stroke-dasharray="${BAT_COMET_DASHARRAY}" ${extraAttrs}`,
+      ),
+      ringSquarePolygon(
+        cx,
+        cy,
+        `${id}-square`,
+        `stroke-dasharray="${cometDasharray(RING_PERIMETER_SQUARE)}" ${extraAttrs}`,
+      ),
+      ringHexPolygon(
+        cx,
+        cy,
+        `${id}-hex`,
+        `stroke-dasharray="${cometDasharray(RING_PERIMETER_HEX)}" ${extraAttrs}`,
+      ),
     ].join('\n      ');
 
   const tail = BATTERY_COMET_LAYERS.filter((l) => l.delay > 0)
@@ -177,7 +210,11 @@ function batteryCometMarkup(cx: number, cy: number): string {
 // MDI paths live in a 24×24 box. We draw native SVG paths instead of
 // foreignObject because Safari/WebKit mis-positions foreignObject inside
 // scaled SVGs. Centers the icon at (centerX, centerY) and scales it to size.
-export function iconTransform(centerX: number, centerY: number, size: number): string {
+export function iconTransform(
+  centerX: number,
+  centerY: number,
+  size: number,
+): string {
   return `translate(${centerX - size / 2} ${centerY - size / 2}) scale(${size / 24})`;
 }
 
@@ -203,7 +240,14 @@ export interface RowLayout {
 export function rowLayout(rowGap: number): RowLayout {
   const topY = MID_ROW_Y - rowGap;
   const botY = MID_ROW_Y + rowGap;
-  return { topY, botY, topInner: topY + 52, botInner: botY - 52, topOuter: topY - 52, botOuter: botY + 52 };
+  return {
+    topY,
+    botY,
+    topInner: topY + 52,
+    botInner: botY - 52,
+    topOuter: topY - 52,
+    botOuter: botY + 52,
+  };
 }
 
 // Columns, analogous to rows above — but unlike the row layout (symmetric
@@ -260,12 +304,32 @@ export const DOTS: {
   { id: 'solar-bat', cls: 'solar', path: 'p-solar-bat' },
   // Grid → battery shares the battery↔grid path, run in reverse (grid to battery).
   { id: 'grid-bat', cls: 'grid', path: 'p-bat-grid', reverse: true },
-  { id: 'home-consumer1', cls: 'consumer1', path: 'p-home-consumer1', maxDots: 2 },
-  { id: 'home-consumer2', cls: 'consumer2', path: 'p-home-consumer2', maxDots: 2 },
+  {
+    id: 'home-consumer1',
+    cls: 'consumer1',
+    path: 'p-home-consumer1',
+    maxDots: 2,
+  },
+  {
+    id: 'home-consumer2',
+    cls: 'consumer2',
+    path: 'p-home-consumer2',
+    maxDots: 2,
+  },
   { id: 'home-consumer3', cls: 'consumer3', path: 'p-home-consumer3' },
   { id: 'home-consumer4', cls: 'consumer4', path: 'p-home-consumer4' },
-  { id: 'bat-batteryload1', cls: 'battery-load1', path: 'p-bat-batteryload1', maxDots: 2 },
-  { id: 'bat-batteryload2', cls: 'battery-load2', path: 'p-bat-batteryload2', maxDots: 2 },
+  {
+    id: 'bat-batteryload1',
+    cls: 'battery-load1',
+    path: 'p-bat-batteryload1',
+    maxDots: 2,
+  },
+  {
+    id: 'bat-batteryload2',
+    cls: 'battery-load2',
+    path: 'p-bat-batteryload2',
+    maxDots: 2,
+  },
 ];
 
 // Upper bound on `options.dotCount` — how many evenly-spaced marker elements
@@ -394,7 +458,13 @@ export function curvesForLayout(
   rowGap: number,
   columnGap: number,
   homePullback = 51,
-): { id: string; p0: [number, number]; p1: [number, number]; p2: [number, number]; p3: [number, number] }[] {
+): {
+  id: string;
+  p0: [number, number];
+  p1: [number, number];
+  p2: [number, number];
+  p3: [number, number];
+}[] {
   const { topInner, botInner } = rowLayout(rowGap);
   const { col1, col2, col3, col4 } = columnLayout(columnGap);
   const vHandle = (38 * rowGap) / DEFAULT_ROW_GAP;
@@ -660,10 +730,14 @@ const L = rowLayout(DEFAULT_ROW_GAP);
 const C = columnLayout(DEFAULT_COLUMN_GAP);
 const curveD = (c: ReturnType<typeof curvesForLayout>[number]) =>
   `M${c.p0[0]},${c.p0[1]} C${c.p1[0]},${c.p1[1]} ${c.p2[0]},${c.p2[1]} ${c.p3[0]},${c.p3[1]}`;
-const [cSolarHome, cSolarGrid, cBatHome, cBatGrid, cHomeConsumer4, cHomeConsumer3] = curvesForLayout(
-  DEFAULT_ROW_GAP,
-  DEFAULT_COLUMN_GAP,
-);
+const [
+  cSolarHome,
+  cSolarGrid,
+  cBatHome,
+  cBatGrid,
+  cHomeConsumer4,
+  cHomeConsumer3,
+] = curvesForLayout(DEFAULT_ROW_GAP, DEFAULT_COLUMN_GAP);
 
 // Every node's background/ring is a <rect> whose corner radius doubles as
 // the node-shape switch: rx=ry=52 (half its own 104 width/height) reads as
@@ -673,7 +747,12 @@ const [cSolarHome, cSolarGrid, cBatHome, cBatGrid, cHomeConsumer4, cHomeConsumer
 // `options.nodeShape`); kept as one shared helper here so every node's
 // markup is generated identically rather than each hand-writing its own
 // bg/ring pair.
-function nodeShapeRect(cx: number, cy: number, cls: string, id: string): string {
+function nodeShapeRect(
+  cx: number,
+  cy: number,
+  cls: string,
+  id: string,
+): string {
   return `<rect x="${cx - 52}" y="${cy - 52}" width="104" height="104" rx="52" ry="52" class="${cls}" id="${id}" />`;
 }
 
@@ -740,15 +819,25 @@ export function hexagonPoints(cx: number, cy: number, apothem = 52): string {
 // regardless of `nodeShape`, without reverse-engineering wherever a plain
 // <rect>'s own implicit path start happens to fall (see squareRingPoints()
 // for the same fix applied to the square ring).
-export function hexagonRingPoints(cx: number, cy: number, apothem = 47): string {
-  const [topLeft, topRight, right, botRight, botLeft, left] = hexagonVertexOffsets(apothem);
+export function hexagonRingPoints(
+  cx: number,
+  cy: number,
+  apothem = 47,
+): string {
+  const [topLeft, topRight, right, botRight, botLeft, left] =
+    hexagonVertexOffsets(apothem);
   const topCenter: [number, number] = [0, -apothem];
   return [topCenter, topRight, right, botRight, botLeft, left, topLeft]
     .map(([dx, dy]) => `${cx + dx},${cy + dy}`)
     .join(' ');
 }
 
-function nodeShapeHexagon(cx: number, cy: number, cls: string, id: string): string {
+function nodeShapeHexagon(
+  cx: number,
+  cy: number,
+  cls: string,
+  id: string,
+): string {
   return `<polygon points="${hexagonPoints(cx, cy)}" class="${cls}" id="${id}" style="display: none" />`;
 }
 

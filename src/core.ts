@@ -8,7 +8,12 @@ import type {
   NodeShape,
   DotShape,
 } from './types';
-import { DEFAULT_COLORS, DEFAULT_LABELS, DEFAULT_ICONS, DEFAULT_TOPOLOGY } from './defaults';
+import {
+  DEFAULT_COLORS,
+  DEFAULT_LABELS,
+  DEFAULT_ICONS,
+  DEFAULT_TOPOLOGY,
+} from './defaults';
 import { computeFlowAllocation } from './flow-allocation';
 import type { RowLayout, ColumnLayout } from './skeleton';
 import {
@@ -141,18 +146,34 @@ export class PowerFlow {
   // (see applyIconStyle()). Read from the skeleton rather than duplicated
   // here: each entry's *default*-mode transform/y values are cached once from
   // the static SVG at construction time, not hardcoded a second time.
-  private static readonly ICON_LAYOUT_NODES: { prefix: string; icon: string; texts: string[] }[] = [
-    { prefix: 'solar', icon: 'solar-icon', texts: ['t-solar-val', 't-solar-lbl'] },
+  private static readonly ICON_LAYOUT_NODES: {
+    prefix: string;
+    icon: string;
+    texts: string[];
+  }[] = [
+    {
+      prefix: 'solar',
+      icon: 'solar-icon',
+      texts: ['t-solar-val', 't-solar-lbl'],
+    },
     { prefix: 'grid', icon: 'grid-icon', texts: ['t-grid-val', 't-grid-lbl'] },
     { prefix: 'home', icon: 'home-icon', texts: ['t-home-val', 't-home-lbl'] },
-    { prefix: 'bat', icon: 'bat-icon', texts: ['t-bat-soc', 't-bat-watts', 't-bat-lbl'] },
+    {
+      prefix: 'bat',
+      icon: 'bat-icon',
+      texts: ['t-bat-soc', 't-bat-watts', 't-bat-lbl'],
+    },
     { prefix: 'c1', icon: 'c1-icon', texts: ['t-c1-val', 't-c1-lbl'] },
     { prefix: 'c2', icon: 'c2-icon', texts: ['t-c2-val', 't-c2-lbl'] },
     { prefix: 'c3', icon: 'c3-icon', texts: ['t-c3-val', 't-c3-lbl'] },
     { prefix: 'c4', icon: 'c4-icon', texts: ['t-c4-val', 't-c4-lbl'] },
     { prefix: 'bl1', icon: 'bl1-icon', texts: ['t-bl1-val', 't-bl1-lbl'] },
     { prefix: 'bl2', icon: 'bl2-icon', texts: ['t-bl2-val', 't-bl2-lbl'] },
-    { prefix: 'conflict', icon: 'conflict-icon', texts: ['t-conflict-val', 't-conflict-desc'] },
+    {
+      prefix: 'conflict',
+      icon: 'conflict-icon',
+      texts: ['t-conflict-val', 't-conflict-desc'],
+    },
   ];
   // Populated once in cacheIconLayouts(), keyed by prefix — the exact
   // transform/y values the static skeleton shipped with, so 'default' mode
@@ -302,14 +323,18 @@ export class PowerFlow {
   // The marker element currently shown for a dot (its `display` is toggled
   // in setDot()), depending on the active dotShape.
   private activeMarker(m: DotMarker): SVGGraphicsElement {
-    return this.dotShape === 'circle' ? m.circle : m.oriented[this.dotShape].group;
+    return this.dotShape === 'circle'
+      ? m.circle
+      : m.oriented[this.dotShape].group;
   }
 
   // The element that actually gets the `.shrunk` pop-in/out class — for the
   // oriented shapes that's the inner shape, not the position/rotation-
   // carrying <g> (see the `OrientedMarker` comment above for why).
   private shrinkTarget(m: DotMarker): Element {
-    return this.dotShape === 'circle' ? m.circle : m.oriented[this.dotShape].shrinkEl;
+    return this.dotShape === 'circle'
+      ? m.circle
+      : m.oriented[this.dotShape].shrinkEl;
   }
 
   // Snapshots each node's *default*-mode icon transform and text y positions
@@ -323,7 +348,8 @@ export class PowerFlow {
         iconTransform: iconEl?.getAttribute('transform') ?? '',
         textY: texts.map((id) => this.el[id]?.getAttribute('y') ?? '0'),
         textFontSize: texts.map(
-          (id) => (this.el[id] as SVGTextElement | undefined)?.style.fontSize ?? '',
+          (id) =>
+            (this.el[id] as SVGTextElement | undefined)?.style.fontSize ?? '',
         ),
       };
     }
@@ -339,15 +365,21 @@ export class PowerFlow {
   // inline) — read each one's own cached size (or its CSS-class default) so
   // the 'full'-mode bump scales *from whatever that element actually is*,
   // not a single hardcoded number.
-  private static bumpedFontSize(el: SVGTextElement, cachedSize: string): string {
-    const base = parseFloat(cachedSize) || (el.classList.contains('val-text') ? 14 : 11);
+  private static bumpedFontSize(
+    el: SVGTextElement,
+    cachedSize: string,
+  ): string {
+    const base =
+      parseFloat(cachedSize) || (el.classList.contains('val-text') ? 14 : 11);
     return `${(base * 1.15).toFixed(1)}px`;
   }
 
   private applyIconStyle() {
     for (const { prefix, icon, texts } of PowerFlow.ICON_LAYOUT_NODES) {
       const iconEl = this.el[icon];
-      const textEls = texts.map((id) => this.el[id] as SVGTextElement | undefined);
+      const textEls = texts.map(
+        (id) => this.el[id] as SVGTextElement | undefined,
+      );
       const cached = this.iconLayoutCache[prefix];
       if (this.iconStyle === 'default') {
         iconEl?.setAttribute('transform', cached.iconTransform);
@@ -374,7 +406,11 @@ export class PowerFlow {
       const startY = cy - ((textEls.length - 1) * lineGap) / 2 + 4;
       textEls.forEach((t, i) => {
         t?.setAttribute('y', String(startY + i * lineGap));
-        if (t) t.style.fontSize = PowerFlow.bumpedFontSize(t, cached.textFontSize[i]);
+        if (t)
+          t.style.fontSize = PowerFlow.bumpedFontSize(
+            t,
+            cached.textFontSize[i],
+          );
         t?.classList.add('text-on-full');
       });
     }
@@ -384,7 +420,11 @@ export class PowerFlow {
   // sits on the fixed middle row but a `columnGap`-moved column; home (and
   // consumer1/consumer2/batteryLoad2/conflict, which share its column) sits
   // on both a fixed row *and* fixed column — it never moves at all.
-  private static nodeXY(prefix: string, rows: RowLayout, cols: ColumnLayout): [number, number] {
+  private static nodeXY(
+    prefix: string,
+    rows: RowLayout,
+    cols: ColumnLayout,
+  ): [number, number] {
     const cy = PowerFlow.TOP_ROW_PREFIXES.includes(prefix)
       ? rows.topY
       : PowerFlow.BOTTOM_ROW_PREFIXES.includes(prefix)
@@ -406,7 +446,14 @@ export class PowerFlow {
     return [cx[prefix] ?? cols.col3, cy];
   }
   private static readonly TOP_ROW_PREFIXES = ['solar', 'c1', 'c3'];
-  private static readonly BOTTOM_ROW_PREFIXES = ['bat', 'c2', 'c4', 'bl1', 'bl2', 'conflict'];
+  private static readonly BOTTOM_ROW_PREFIXES = [
+    'bat',
+    'c2',
+    'c4',
+    'bl1',
+    'bl2',
+    'conflict',
+  ];
 
   private setPathD(id: string, d: string) {
     (this.el[id] as SVGPathElement | undefined)?.setAttribute('d', d);
@@ -460,9 +507,17 @@ export class PowerFlow {
       // never stale if the caller switches to 'hexagon' after a rowGap/
       // columnGap change.
       const hexPts = hexagonPoints(cx, cy);
-      (this.el[`${prefix}-bg-hex`] as SVGPolygonElement | undefined)?.setAttribute('points', hexPts);
-      (this.el[`${prefix}-ring-hex`] as SVGPolygonElement | undefined)?.setAttribute('points', hexPts);
-      for (const id of texts) (this.el[id] as SVGTextElement | undefined)?.setAttribute('x', String(cx));
+      (
+        this.el[`${prefix}-bg-hex`] as SVGPolygonElement | undefined
+      )?.setAttribute('points', hexPts);
+      (
+        this.el[`${prefix}-ring-hex`] as SVGPolygonElement | undefined
+      )?.setAttribute('points', hexPts);
+      for (const id of texts)
+        (this.el[id] as SVGTextElement | undefined)?.setAttribute(
+          'x',
+          String(cx),
+        );
 
       // Refreshes `iconLayoutCache` (icon/text offsets from the node's own
       // cx/cy are fixed — -18/+16/+29 for a 2-line node, -27/+5/+18/+31 for
@@ -508,12 +563,30 @@ export class PowerFlow {
     // (hexagon included — its apothem is still 52, only its width differs)
     // has the same 52px half-size.
     const hPull = this.nodeShape === 'hexagon' ? NODE_HEX_CIRCUMRADIUS : 52;
-    this.setPathD('p-grid-home', `M${cols.col1 + hPull},${MID_ROW_Y} H${cols.col3 - hPull}`);
-    this.setPathD('p-solar-bat', `M${cols.col2},${rows.topInner} V${rows.botInner}`);
-    this.setPathD('p-home-consumer1', `M${cols.col3},${MID_ROW_Y - 52} V${rows.topInner}`);
-    this.setPathD('p-home-consumer2', `M${cols.col3},${MID_ROW_Y + 52} V${rows.botInner}`);
-    this.setPathD('p-bat-batteryload1', `M${cols.col2 - hPull},${rows.botY} H${cols.col1 + hPull}`);
-    this.setPathD('p-bat-batteryload2', `M${cols.col2 + hPull},${rows.botY} H${cols.col3 - hPull}`);
+    this.setPathD(
+      'p-grid-home',
+      `M${cols.col1 + hPull},${MID_ROW_Y} H${cols.col3 - hPull}`,
+    );
+    this.setPathD(
+      'p-solar-bat',
+      `M${cols.col2},${rows.topInner} V${rows.botInner}`,
+    );
+    this.setPathD(
+      'p-home-consumer1',
+      `M${cols.col3},${MID_ROW_Y - 52} V${rows.topInner}`,
+    );
+    this.setPathD(
+      'p-home-consumer2',
+      `M${cols.col3},${MID_ROW_Y + 52} V${rows.botInner}`,
+    );
+    this.setPathD(
+      'p-bat-batteryload1',
+      `M${cols.col2 - hPull},${rows.botY} H${cols.col1 + hPull}`,
+    );
+    this.setPathD(
+      'p-bat-batteryload2',
+      `M${cols.col2 + hPull},${rows.botY} H${cols.col3 - hPull}`,
+    );
   }
 
   // `curveBend` behaves like a corner *radius*: `0` is a sharp, un-rounded
@@ -555,8 +628,13 @@ export class PowerFlow {
     // HEX_HOME_PULLBACK in skeleton.ts) — using the circle/square value
     // there would land these 6 curves' own endpoints inside the wider
     // hexagon, clipping into it.
-    const homePullback = this.nodeShape === 'hexagon' ? HEX_HOME_PULLBACK : undefined;
-    for (const { id, p0, p1, p3 } of curvesForLayout(this.rowGap, this.columnGap, homePullback)) {
+    const homePullback =
+      this.nodeShape === 'hexagon' ? HEX_HOME_PULLBACK : undefined;
+    for (const { id, p0, p1, p3 } of curvesForLayout(
+      this.rowGap,
+      this.columnGap,
+      homePullback,
+    )) {
       const path = this.el[id] as SVGPathElement | undefined;
       if (!path) continue;
       // p1 sits purely in p0's own fixed departure direction (curvesForLayout()
@@ -565,21 +643,32 @@ export class PowerFlow {
       // is simply where a line continuing in that direction from p0
       // crosses the line p3 arrives along (the other axis).
       const exitsVertically = p0[0] === p1[0];
-      const corner: [number, number] = exitsVertically ? [p0[0], p3[1]] : [p3[0], p0[1]];
+      const corner: [number, number] = exitsVertically
+        ? [p0[0], p3[1]]
+        : [p3[0], p0[1]];
       const mid: [number, number] = [(p0[0] + p3[0]) / 2, (p0[1] + p3[1]) / 2];
       let s: [number, number];
       let e: [number, number];
       let ctrl: [number, number];
       if (u <= 0.5) {
         const f = u / 0.5;
-        s = [corner[0] + f * (p0[0] - corner[0]), corner[1] + f * (p0[1] - corner[1])];
-        e = [corner[0] + f * (p3[0] - corner[0]), corner[1] + f * (p3[1] - corner[1])];
+        s = [
+          corner[0] + f * (p0[0] - corner[0]),
+          corner[1] + f * (p0[1] - corner[1]),
+        ];
+        e = [
+          corner[0] + f * (p3[0] - corner[0]),
+          corner[1] + f * (p3[1] - corner[1]),
+        ];
         ctrl = corner;
       } else {
         const f = (u - 0.5) / 0.5;
         s = p0;
         e = p3;
-        ctrl = [corner[0] + f * (mid[0] - corner[0]), corner[1] + f * (mid[1] - corner[1])];
+        ctrl = [
+          corner[0] + f * (mid[0] - corner[0]),
+          corner[1] + f * (mid[1] - corner[1]),
+        ];
       }
       const d = `M${p0[0]},${p0[1]} L${s[0]},${s[1]} Q${ctrl[0]},${ctrl[1]} ${e[0]},${e[1]} L${p3[0]},${p3[1]}`;
       path.setAttribute('d', d);
@@ -612,7 +701,8 @@ export class PowerFlow {
     // visible (cheap, and simpler than tracking "just the active one" here
     // too) — matches paintNode()'s own -hex node treatment.
     for (const id of PowerFlow.COVERAGE_RING_IDS) {
-      for (const variant of ['', '-square', '-hex']) this.el[`${id}${variant}`]?.classList.toggle('node-filled-ink', on);
+      for (const variant of ['', '-square', '-hex'])
+        this.el[`${id}${variant}`]?.classList.toggle('node-filled-ink', on);
     }
   }
 
@@ -633,11 +723,13 @@ export class PowerFlow {
     const hexActive = this.nodeShape === 'hexagon';
     for (const { prefix } of PowerFlow.ICON_LAYOUT_NODES) {
       for (const suffix of ['bg', 'ring']) {
-        const rect = this.el[`${prefix}-${suffix}`] as SVGRectElement | undefined;
+        const rect = this.el[`${prefix}-${suffix}`] as
+          SVGRectElement | undefined;
         rect?.setAttribute('rx', radius);
         rect?.setAttribute('ry', radius);
         if (rect) rect.style.display = hexActive ? 'none' : '';
-        const hex = this.el[`${prefix}-${suffix}-hex`] as SVGElement | undefined;
+        const hex = this.el[`${prefix}-${suffix}-hex`] as
+          SVGElement | undefined;
         if (hex) hex.style.display = hexActive ? '' : 'none';
       }
     }
@@ -677,12 +769,20 @@ export class PowerFlow {
     'bat-soc-mask-arc',
   ];
   private ringShapeSuffix(): '' | '-square' | '-hex' {
-    return this.nodeShape === 'square' ? '-square' : this.nodeShape === 'hexagon' ? '-hex' : '';
+    return this.nodeShape === 'square'
+      ? '-square'
+      : this.nodeShape === 'hexagon'
+        ? '-hex'
+        : '';
   }
   private applyRingShape() {
     const suffix = this.ringShapeSuffix();
     this.ringPerimeter =
-      this.nodeShape === 'square' ? RING_PERIMETER_SQUARE : this.nodeShape === 'hexagon' ? RING_PERIMETER_HEX : ARC_LENGTH;
+      this.nodeShape === 'square'
+        ? RING_PERIMETER_SQUARE
+        : this.nodeShape === 'hexagon'
+          ? RING_PERIMETER_HEX
+          : ARC_LENGTH;
     this.ringStartFraction = this.nodeShape === 'circle' ? 0.75 : 0;
     for (const id of PowerFlow.RING_IDS) {
       for (const variant of ['', '-square', '-hex']) {
@@ -756,7 +856,8 @@ export class PowerFlow {
       const behind = s.path.getPointAtLength(
         Math.max(0, Math.min(s.length, currentLen - dir * d)),
       );
-      const angle = (Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * 180) / Math.PI;
+      const angle =
+        (Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * 180) / Math.PI;
       m.oriented[this.dotShape].group.setAttribute(
         'transform',
         `translate(${p.x} ${p.y}) rotate(${angle})`,
@@ -775,7 +876,10 @@ export class PowerFlow {
   // never spends more than a fifth of its lap shrunk.
   private lapPopOutFraction(s: DotFlowState): number {
     if (s.speed <= 0 || s.length <= 0) return 0;
-    return Math.min(0.2, (s.speed * (PowerFlow.LAP_POP_OUT_MS / 1000)) / s.length);
+    return Math.min(
+      0.2,
+      (s.speed * (PowerFlow.LAP_POP_OUT_MS / 1000)) / s.length,
+    );
   }
 
   // Reuses the same shrink/grow CSS transition as setDot's visibility pop-in/
@@ -809,7 +913,8 @@ export class PowerFlow {
     this.lastTime = now;
     for (const id in this.dots) {
       const s = this.dots[id];
-      const animating = s.visible || s.markers.some((m) => m.active || m.shrinking);
+      const animating =
+        s.visible || s.markers.some((m) => m.active || m.shrinking);
       if (!animating || s.length === 0) continue;
       s.phase += (s.speed * dt) / s.length;
       s.phase -= Math.floor(s.phase); // wrap into [0, 1)
@@ -820,7 +925,8 @@ export class PowerFlow {
       });
     }
     if (this.batteryCometSpeed > 0) {
-      this.batteryCometPhase += (this.batteryCometSpeed * dt) / this.ringPerimeter;
+      this.batteryCometPhase +=
+        (this.batteryCometSpeed * dt) / this.ringPerimeter;
       this.batteryCometPhase -= Math.floor(this.batteryCometPhase); // wrap into [0, 1)
       for (const { el, delay } of this.batteryCometLayers) {
         // A trailing layer shows where the head was `delay` (a fraction of
@@ -872,11 +978,17 @@ export class PowerFlow {
     if (settings?.curveBend !== undefined) {
       this.curveBend = Math.max(0, Math.min(2.5, settings.curveBend));
     }
-    if (settings?.dotShape !== undefined && settings.dotShape !== this.dotShape) {
+    if (
+      settings?.dotShape !== undefined &&
+      settings.dotShape !== this.dotShape
+    ) {
       this.swapDotShape(settings.dotShape);
     }
     if (settings?.dotCount !== undefined) {
-      this.dotCount = Math.max(1, Math.min(MAX_DOTS_PER_TRACK, Math.round(settings.dotCount)));
+      this.dotCount = Math.max(
+        1,
+        Math.min(MAX_DOTS_PER_TRACK, Math.round(settings.dotCount)),
+      );
     }
     if (settings?.rowGap !== undefined) {
       // Floor of 110 keeps the top/bottom rows comfortably clear of the
@@ -980,9 +1092,11 @@ export class PowerFlow {
     // sides into that box) — the left/rightmost columns' own hexagons would
     // otherwise get clipped at the diagram's own edge, so both sides of the
     // viewBox widen by the same extra margin every hexagon already needs.
-    const hexExtra = this.nodeShape === 'hexagon' ? NODE_HEX_CIRCUMRADIUS - 52 : 0;
+    const hexExtra =
+      this.nodeShape === 'hexagon' ? NODE_HEX_CIRCUMRADIUS - 52 : 0;
     const minX = baseMinX - hexExtra;
-    const maxX = (hasConsumer3 || hasConsumer4 ? col4 : col3) + 52 + 3 + hexExtra;
+    const maxX =
+      (hasConsumer3 || hasConsumer4 ? col4 : col3) + 52 + 3 + hexExtra;
     const width = maxX - minX;
     const height = maxY - minY;
     this.svg.setAttribute('viewBox', `${minX} ${minY} ${width} ${height}`);
@@ -1016,7 +1130,10 @@ export class PowerFlow {
     // caller sets a batteryLoad1 value without a battery value. batteryLoad2
     // additionally hides during a slot conflict (see hasSlotConflict above).
     this.setTopo('batteryLoad1', hasBattery && hasBatteryLoad);
-    this.setTopo('batteryLoad2', hasBattery && hasBatteryLoad2 && !hasSlotConflict);
+    this.setTopo(
+      'batteryLoad2',
+      hasBattery && hasBatteryLoad2 && !hasSlotConflict,
+    );
     // consumer2 hides during a slot conflict too — see hasSlotConflict above.
     this.setTopo('consumer1', hasConsumer1);
     this.setTopo('consumer2', hasConsumer2 && !hasSlotConflict);
@@ -1070,7 +1187,10 @@ export class PowerFlow {
     );
     this.setDot(
       'bat-batteryload2',
-      hasBattery && hasBatteryLoad2 && !hasSlotConflict && batteryLoad2Watts > 0,
+      hasBattery &&
+        hasBatteryLoad2 &&
+        !hasSlotConflict &&
+        batteryLoad2Watts > 0,
       batteryLoad2Watts,
     );
 
@@ -1084,12 +1204,18 @@ export class PowerFlow {
     // carries the active dot's own `speed` along, purely for
     // `options.trackPulse` below — a track pulses in step with how fast its
     // own dot is traveling, so a higher-load flow visibly pulses faster.
-    const trackActive: Record<string, { colorVar: string | null; speed: number }> = {};
+    const trackActive: Record<
+      string,
+      { colorVar: string | null; speed: number }
+    > = {};
     for (const d of DOTS) {
       const id = trackIdFor(d.path);
       const dotState = this.dots[d.id];
       if (dotState.visible) {
-        trackActive[id] = { colorVar: DOT_CLS_TO_COLOR_VAR[d.cls] ?? d.cls, speed: dotState.speed };
+        trackActive[id] = {
+          colorVar: DOT_CLS_TO_COLOR_VAR[d.cls] ?? d.cls,
+          speed: dotState.speed,
+        };
       } else if (!(id in trackActive)) {
         trackActive[id] = { colorVar: null, speed: 0 };
       }
@@ -1104,7 +1230,10 @@ export class PowerFlow {
         if (this.trackPulse) {
           const duration = Math.max(
             PowerFlow.TRACK_PULSE_MIN_S,
-            Math.min(PowerFlow.TRACK_PULSE_MAX_S, PowerFlow.TRACK_PULSE_BASE_PX / Math.max(speed, 1)),
+            Math.min(
+              PowerFlow.TRACK_PULSE_MAX_S,
+              PowerFlow.TRACK_PULSE_BASE_PX / Math.max(speed, 1),
+            ),
           );
           el.style.setProperty('animation-duration', `${duration.toFixed(2)}s`);
         }
@@ -1166,7 +1295,8 @@ export class PowerFlow {
       const watts = this.el['t-bat-watts'] as SVGTextElement;
       // Same accent-colored-value pattern (and same `filled`-mode fixup) as
       // the grid node's value text above.
-      watts.style.fill = this.nodeStyle === 'filled' ? FILLED_INK : batteryColor;
+      watts.style.fill =
+        this.nodeStyle === 'filled' ? FILLED_INK : batteryColor;
       watts.textContent = `${batteryWatts > 0 ? '↓' : '↑'} ${formatWatts(Math.abs(batteryWatts))}`;
       this.labelText('t-bat-lbl', labels.battery);
       // SoC inner ring — progress arc from 12 o'clock clockwise. Same
@@ -1175,8 +1305,11 @@ export class PowerFlow {
       // this ring's stroke is `batteryColor` — the *same* color `paintNode`
       // just gave the background, so at `filled`'s full opacity it would
       // otherwise vanish into it entirely, not just blend.
-      const socArc = this.el[`bat-soc-arc${this.ringShapeSuffix()}`] as SVGGraphicsElement;
-      socArc.style.stroke = this.nodeStyle === 'filled' ? FILLED_INK : batteryColor;
+      const socArc = this.el[
+        `bat-soc-arc${this.ringShapeSuffix()}`
+      ] as SVGGraphicsElement;
+      socArc.style.stroke =
+        this.nodeStyle === 'filled' ? FILLED_INK : batteryColor;
       const pct =
         data.batterySoc != null
           ? Math.max(0, Math.min(100, data.batterySoc)) / 100
@@ -1220,7 +1353,10 @@ export class PowerFlow {
 
     // ── Battery load 1 node ──
     if (hasBatteryLoad) {
-      this.el['n-batteryload1'].classList.toggle('dim', batteryLoad1Watts === 0);
+      this.el['n-batteryload1'].classList.toggle(
+        'dim',
+        batteryLoad1Watts === 0,
+      );
       this.paintNode('bl1', colors.batteryLoad1);
       this.text('t-bl1-val', formatWatts(batteryLoad1Watts));
       this.labelText('t-bl1-lbl', labels.batteryLoad1);
@@ -1288,16 +1424,16 @@ export class PowerFlow {
   // `prefix` must match an entry in ICON_LAYOUT_NODES — its `-bg`/`-ring`/
   // `-icon` ids and text ids are derived/looked up from there.
   private paintNode(prefix: string, color: string) {
-    const texts = PowerFlow.ICON_LAYOUT_NODES.find((n) => n.prefix === prefix)?.texts ?? [];
+    const texts =
+      PowerFlow.ICON_LAYOUT_NODES.find((n) => n.prefix === prefix)?.texts ?? [];
     const isFilled = this.nodeStyle === 'filled';
-    const bg =
-      isFilled
-        ? color
-        : this.nodeStyle === 'tonal'
-          ? tint(color, 55)
-          : this.nodeStyle === 'outline'
-            ? 'none'
-            : tint(color);
+    const bg = isFilled
+      ? color
+      : this.nodeStyle === 'tonal'
+        ? tint(color, 55)
+        : this.nodeStyle === 'outline'
+          ? 'none'
+          : tint(color);
     const ringHidden = this.nodeStyle === 'tonal' || isFilled;
 
     this.fill(`${prefix}-bg`, bg);
@@ -1395,7 +1531,10 @@ export class PowerFlow {
       const wantActive = visible && i < count;
       if (wantActive && !m.active) {
         // Pop in: position first, show at scale(0), force reflow, then spring to full size.
-        if (m.hideTimer) { clearTimeout(m.hideTimer); m.hideTimer = undefined; }
+        if (m.hideTimer) {
+          clearTimeout(m.hideTimer);
+          m.hideTimer = undefined;
+        }
         m.active = true;
         m.shrinking = false;
         // Fresh lap-pop bookkeeping (see applyLapPop()) — starts wherever
@@ -1407,9 +1546,11 @@ export class PowerFlow {
         this.placeMarker(s, i);
         this.shrinkTarget(m).classList.add('shrunk');
         this.activeMarker(m).style.display = '';
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          if (m.active) this.shrinkTarget(m).classList.remove('shrunk');
-        }));
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            if (m.active) this.shrinkTarget(m).classList.remove('shrunk');
+          }),
+        );
       } else if (!wantActive && m.active) {
         // Shrink out: keep moving while scaling to 0, then hide after the transition.
         m.active = false;
@@ -1482,11 +1623,19 @@ export class PowerFlow {
   // here (rather than skipping the call site) still keeps the mask's
   // dasharray in sync, so re-enabling it later doesn't show a stale extent.
   private applyBatteryHighlight(batteryWatts: number, pct: number) {
-    const group = this.el['bat-charge-highlight-group'] as SVGGElement | undefined;
-    const mask = this.el[`bat-soc-mask-arc${this.ringShapeSuffix()}`] as SVGGraphicsElement | undefined;
+    const group = this.el['bat-charge-highlight-group'] as
+      SVGGElement | undefined;
+    const mask = this.el[`bat-soc-mask-arc${this.ringShapeSuffix()}`] as
+      SVGGraphicsElement | undefined;
     if (!group || !mask) return;
-    mask.setAttribute('stroke-dasharray', `${pct * this.ringPerimeter} ${this.ringPerimeter - pct * this.ringPerimeter}`);
-    mask.setAttribute('stroke-dashoffset', `${this.ringPerimeter * this.ringStartFraction}`);
+    mask.setAttribute(
+      'stroke-dasharray',
+      `${pct * this.ringPerimeter} ${this.ringPerimeter - pct * this.ringPerimeter}`,
+    );
+    mask.setAttribute(
+      'stroke-dashoffset',
+      `${this.ringPerimeter * this.ringStartFraction}`,
+    );
     const rate = Math.abs(batteryWatts);
     const active = this.batteryChargeHighlight && rate > 0;
     group.classList.toggle('active', active);
@@ -1506,7 +1655,9 @@ export class PowerFlow {
   // two stay hidden regardless of `share`, since applyRingShape() already
   // hid them unconditionally.
   private arc(id: string, share: number, dash: number, offsetShare: number) {
-    const node = this.el[`${id}${this.ringShapeSuffix()}`] as SVGGraphicsElement;
+    const node = this.el[
+      `${id}${this.ringShapeSuffix()}`
+    ] as SVGGraphicsElement;
     if (share <= 0) {
       node.style.display = 'none';
       return;
@@ -1514,7 +1665,10 @@ export class PowerFlow {
     node.style.display = '';
     const len = this.ringPerimeter;
     node.setAttribute('stroke-dasharray', `${dash * len} ${len - dash * len}`);
-    node.setAttribute('stroke-dashoffset', `${len * this.ringStartFraction - offsetShare * len}`);
+    node.setAttribute(
+      'stroke-dashoffset',
+      `${len * this.ringStartFraction - offsetShare * len}`,
+    );
   }
 }
 

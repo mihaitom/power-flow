@@ -76,7 +76,12 @@ describe('computeFlowAllocation — default topology, no direct loads', () => {
   });
 
   it('is unaffected by consumer1/consumer2 — they are already included in `load`', () => {
-    const withoutConsumers = allocate({ solar: 3000, load: 8000, battery: -1000, grid: 0 });
+    const withoutConsumers = allocate({
+      solar: 3000,
+      load: 8000,
+      battery: -1000,
+      grid: 0,
+    });
     const withConsumers = allocate({
       solar: 3000,
       load: 8000,
@@ -118,7 +123,7 @@ describe('computeFlowAllocation — batteryLoad1/batteryLoad2 (direct battery po
     expect(r.gridToHome).toBe(200);
   });
 
-  it('requires extra grid charging when direct loads exceed a charging battery\'s net reading', () => {
+  it("requires extra grid charging when direct loads exceed a charging battery's net reading", () => {
     // The bug report: battery nets +100W (charging) while feeding 1150W of
     // direct loads — that needs 1250W of gross charge in total; solar only
     // supplies 600W (forced fully in — see the topology test below), so the
@@ -140,7 +145,7 @@ describe('computeFlowAllocation — batteryLoad1/batteryLoad2 (direct battery po
     expect(r.batToGrid).toBe(0);
   });
 
-  it('requires grid charging when direct loads exceed a discharging battery\'s net reading', () => {
+  it("requires grid charging when direct loads exceed a discharging battery's net reading", () => {
     // "Battery ports exceed discharge (grid tops up)": battery nets -500W
     // discharge, but 700W of direct loads are drawn — the grid must
     // simultaneously top up the battery by 200W for the net to still read 500.
@@ -167,7 +172,12 @@ describe('computeFlowAllocation — batteryLoad1/batteryLoad2 (direct battery po
       batteryLoad1: 0,
       batteryLoad2: 0,
     });
-    const withoutField = allocate({ solar: 200, load: 1000, battery: 300, grid: 0 });
+    const withoutField = allocate({
+      solar: 200,
+      load: 1000,
+      battery: 300,
+      grid: 0,
+    });
     expect(withZero).toEqual(withoutField);
   });
 });

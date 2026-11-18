@@ -221,7 +221,7 @@ input[type='range'] {
   grid-column: 1 / -1;
   background-color: var(--accent);
   height: 60px;
-  color: #e2e8f0
+  color: #e2e8f0;
 }
 button {
   font: inherit;
@@ -305,9 +305,21 @@ dialog::backdrop {
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(2px);
 }
-.install-section { display: flex; flex-direction: column; gap: 8px; }
-.chip-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
-.chip-tabs button { padding: 4px 10px; font-size: 12px; border-radius: 7px; }
+.install-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.chip-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.chip-tabs button {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 7px;
+}
 .install-cmd-row {
   display: flex;
   align-items: center;

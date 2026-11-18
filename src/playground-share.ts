@@ -70,22 +70,24 @@ declare const hljs: {
 
 // ── Install section ───────────────────────────────────────────────────────────
 const PKG_MANAGERS = [
-  { id: "npm",  cmd: "npm install powerflow" },
-  { id: "pnpm", cmd: "pnpm add powerflow"    },
-  { id: "bun",  cmd: "bun add powerflow"     },
-  { id: "yarn", cmd: "yarn add powerflow"    },
+  { id: 'npm', cmd: 'npm install powerflow' },
+  { id: 'pnpm', cmd: 'pnpm add powerflow' },
+  { id: 'bun', cmd: 'bun add powerflow' },
+  { id: 'yarn', cmd: 'yarn add powerflow' },
 ];
 let activePm = PKG_MANAGERS[0].id;
-const pmTabsEl    = document.getElementById("pm-tabs")      as HTMLElement;
-const installCmdEl = document.getElementById("install-cmd") as HTMLElement;
+const pmTabsEl = document.getElementById('pm-tabs') as HTMLElement;
+const installCmdEl = document.getElementById('install-cmd') as HTMLElement;
 
 PKG_MANAGERS.forEach(({ id, cmd }, i) => {
-  const b = document.createElement("button");
+  const b = document.createElement('button');
   b.textContent = id;
-  if (i === 0) b.classList.add("on");
-  b.addEventListener("click", () => {
-    pmTabsEl.querySelectorAll("button").forEach(x => x.classList.remove("on"));
-    b.classList.add("on");
+  if (i === 0) b.classList.add('on');
+  b.addEventListener('click', () => {
+    pmTabsEl
+      .querySelectorAll('button')
+      .forEach((x) => x.classList.remove('on'));
+    b.classList.add('on');
     activePm = id;
     installCmdEl.textContent = cmd;
   });
@@ -93,14 +95,21 @@ PKG_MANAGERS.forEach(({ id, cmd }, i) => {
 });
 installCmdEl.textContent = PKG_MANAGERS[0].cmd;
 
-(document.getElementById("copy-install") as HTMLElement).addEventListener("click", () => {
-  const copyInstallBtn = document.getElementById("copy-install") as HTMLElement;
-  const pm = PKG_MANAGERS.find(p => p.id === activePm)!;
-  navigator.clipboard.writeText(pm.cmd).then(() => {
-    copyInstallBtn.textContent = "Copied!";
-    setTimeout(() => { copyInstallBtn.textContent = "Copy"; }, 1500);
-  });
-});
+(document.getElementById('copy-install') as HTMLElement).addEventListener(
+  'click',
+  () => {
+    const copyInstallBtn = document.getElementById(
+      'copy-install',
+    ) as HTMLElement;
+    const pm = PKG_MANAGERS.find((p) => p.id === activePm)!;
+    navigator.clipboard.writeText(pm.cmd).then(() => {
+      copyInstallBtn.textContent = 'Copied!';
+      setTimeout(() => {
+        copyInstallBtn.textContent = 'Copy';
+      }, 1500);
+    });
+  },
+);
 
 // ── Code modal ────────────────────────────────────────────────────────────────
 const codeDialog = document.getElementById('code-dialog') as HTMLDialogElement;
@@ -113,7 +122,12 @@ let activeFw = 'html';
 // bounds (both happen to sit at 3,3–21,21) to fill the same visual size.
 const FW_TABS = [
   { fw: 'html', label: 'HTML', icon: mdiLanguageHtml5 },
-  { fw: 'ts', label: 'TypeScript', icon: mdiLanguageTypescript, viewBox: '3 3 18 18' },
+  {
+    fw: 'ts',
+    label: 'TypeScript',
+    icon: mdiLanguageTypescript,
+    viewBox: '3 3 18 18',
+  },
   { fw: 'react', label: 'React', icon: mdiReact },
   { fw: 'angular', label: 'Angular', icon: mdiAngular },
   { fw: 'vue', label: 'Vue 3', icon: mdiVuejs },
@@ -185,17 +199,23 @@ function buildSnippet(fw: string): string {
     ([k, v]) => v !== DEFAULT_ICONS[k] && (SLOT_HAS[k]?.checked ?? true),
   );
   const hasIcons = changedIconEntries.length > 0;
-  const iconConstNames = changedIconEntries.map(([, v]) => ALL_ICON_NAMES[v]).filter(Boolean);
+  const iconConstNames = changedIconEntries
+    .map(([, v]) => ALL_ICON_NAMES[v])
+    .filter(Boolean);
   const iconObjStr = (pad: string) => {
     const inner = changedIconEntries
-      .map(([k, v]) => `${pad}  ${k}: ${ALL_ICON_NAMES[v] ?? JSON.stringify(v)}`)
+      .map(
+        ([k, v]) => `${pad}  ${k}: ${ALL_ICON_NAMES[v] ?? JSON.stringify(v)}`,
+      )
       .join(',\n');
     return `{\n${inner},\n${pad}}`;
   };
 
   const activeLabels = currentLabels
     ? Object.fromEntries(
-        Object.entries(currentLabels).filter(([k]) => SLOT_HAS[k]?.checked ?? true),
+        Object.entries(currentLabels).filter(
+          ([k]) => SLOT_HAS[k]?.checked ?? true,
+        ),
       )
     : null;
 
@@ -204,7 +224,9 @@ function buildSnippet(fw: string): string {
   // at (i.e. what `jsObj` expects: entries one level deeper, closing brace
   // at `pad`). `optionsLiteral` is `null` when nothing needs overriding, so
   // callers can skip the field/binding entirely rather than emit `options: {}`.
-  const buildParts = (pad: string): { dataLiteral: string; optionsLiteral: string | null } => {
+  const buildParts = (
+    pad: string,
+  ): { dataLiteral: string; optionsLiteral: string | null } => {
     const dataLiteral = jsObj(data, pad);
 
     // Everything besides `data` — colors, labels, icons, topology and the
@@ -213,12 +235,13 @@ function buildSnippet(fw: string): string {
     const optFields: string[] = [];
     if (Object.keys(changedColors).length)
       optFields.push(`${optInner}colors: ${jsObj(changedColors, optInner)}`);
-    if (hasIcons)
-      optFields.push(`${optInner}icons: ${iconObjStr(optInner)}`);
+    if (hasIcons) optFields.push(`${optInner}icons: ${iconObjStr(optInner)}`);
     if (activeLabels && Object.keys(activeLabels).length)
       optFields.push(`${optInner}labels: ${jsObj(activeLabels, optInner)}`);
     if (Object.keys(changedTopology).length)
-      optFields.push(`${optInner}topology: ${jsObj(changedTopology, optInner)}`);
+      optFields.push(
+        `${optInner}topology: ${jsObj(changedTopology, optInner)}`,
+      );
     if (+speedInp.value !== 1)
       optFields.push(`${optInner}speedScale: ${+speedInp.value}`);
     if (currentNodeStyle !== 'soft')
@@ -235,7 +258,8 @@ function buildSnippet(fw: string): string {
     // Epsilon, not strict equality — the slider<->curveBend mapping is a
     // sqrt()/pow() round-trip (see sliderToCurveBend()), which can leave the
     // default a hair off exactly 1 in floating point even when untouched.
-    if (Math.abs(curveBendVal - 1) > 1e-6) optFields.push(`${optInner}curveBend: ${curveBendVal}`);
+    if (Math.abs(curveBendVal - 1) > 1e-6)
+      optFields.push(`${optInner}curveBend: ${curveBendVal}`);
     if (+dotCountInp.value !== 1)
       optFields.push(`${optInner}dotCount: ${+dotCountInp.value}`);
     if (+rowGapInp.value !== 125)
@@ -274,8 +298,12 @@ function buildSnippet(fw: string): string {
     return `{\n${fields.join(',\n')},\n${pad}}`;
   };
 
-  const mdiImport = hasIcons ? `import { ${iconConstNames.join(', ')} } from '@mdi/js';\n` : '';
-  const mdiImportHtml = hasIcons ? `  import { ${iconConstNames.join(', ')} } from 'https://esm.sh/@mdi/js';\n` : '';
+  const mdiImport = hasIcons
+    ? `import { ${iconConstNames.join(', ')} } from '@mdi/js';\n`
+    : '';
+  const mdiImportHtml = hasIcons
+    ? `  import { ${iconConstNames.join(', ')} } from 'https://esm.sh/@mdi/js';\n`
+    : '';
 
   if (fw === 'html')
     return `<script type="module" src="https://unpkg.com/powerflow"><\/script>
@@ -320,7 +348,9 @@ ${assign('pf', '    ')}
     // tags — no ViewChild/nativeElement detour needed.
     const { dataLiteral, optionsLiteral } = buildParts('  ');
     const optionsBinding = optionsLiteral ? ' [options]="options"' : '';
-    const optionsField = optionsLiteral ? `\n  options = ${optionsLiteral};` : '';
+    const optionsField = optionsLiteral
+      ? `\n  options = ${optionsLiteral};`
+      : '';
     return `import "powerflow";
 ${mdiImport}import { Component, CUSTOM_ELEMENTS_SCHEMA } from "@angular/core";
 
@@ -354,7 +384,9 @@ export default {
     // non-string prop values as DOM properties, so `{data}` binds directly
     // — no `bind:this`/`onMount` detour needed.
     const { dataLiteral, optionsLiteral } = buildParts('  ');
-    const optionsDecl = optionsLiteral ? `\n  const options = ${optionsLiteral};` : '';
+    const optionsDecl = optionsLiteral
+      ? `\n  const options = ${optionsLiteral};`
+      : '';
     const optionsBinding = optionsLiteral ? ' {options}' : '';
     return `<script>
   import "powerflow";
@@ -502,11 +534,17 @@ function encodeState(): ShareState {
   );
   if (Object.keys(changedColors).length)
     state.colors = Object.fromEntries(
-      Object.entries(changedColors).map(([k, i]) => [k, (i as HTMLInputElement).value]),
+      Object.entries(changedColors).map(([k, i]) => [
+        k,
+        (i as HTMLInputElement).value,
+      ]),
     );
 
   const changedTopology = Object.fromEntries(
-    TOPOLOGY_KEYS.filter((k) => !topoInp[k].checked).map((k) => [k, false as const]),
+    TOPOLOGY_KEYS.filter((k) => !topoInp[k].checked).map((k) => [
+      k,
+      false as const,
+    ]),
   );
   if (Object.keys(changedTopology).length) state.topology = changedTopology;
 
@@ -514,7 +552,11 @@ function encodeState(): ShareState {
 }
 
 function syncUrl() {
-  history.replaceState(null, '', '?s=' + toBase64Url(JSON.stringify(encodeState())));
+  history.replaceState(
+    null,
+    '',
+    '?s=' + toBase64Url(JSON.stringify(encodeState())),
+  );
 }
 
 // Fired by playground-colors.ts (reset colors) and playground-testcases.ts
@@ -585,12 +627,24 @@ copyLinkBtn.addEventListener('click', () => {
   vSpeed.textContent = `${s.speed}×`;
   el.options = { ...el.options, speedScale: s.speed };
 
-  if (s.nodeStyle === 'soft' || s.nodeStyle === 'tonal' || s.nodeStyle === 'outline' || s.nodeStyle === 'filled')
+  if (
+    s.nodeStyle === 'soft' ||
+    s.nodeStyle === 'tonal' ||
+    s.nodeStyle === 'outline' ||
+    s.nodeStyle === 'filled'
+  )
     setNodeStyle(s.nodeStyle);
-  if (s.nodeShape === 'circle' || s.nodeShape === 'square' || s.nodeShape === 'hexagon')
+  if (
+    s.nodeShape === 'circle' ||
+    s.nodeShape === 'square' ||
+    s.nodeShape === 'hexagon'
+  )
     setNodeShape(s.nodeShape);
   iconStyleInp.checked = s.iconStyle ?? false;
-  el.options = { ...el.options, iconStyle: iconStyleInp.checked ? 'full' : 'default' };
+  el.options = {
+    ...el.options,
+    iconStyle: iconStyleInp.checked ? 'full' : 'default',
+  };
   if (
     s.dotShape === 'circle' ||
     s.dotShape === 'triangle' ||

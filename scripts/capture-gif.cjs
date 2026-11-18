@@ -143,7 +143,16 @@ execSync('sleep 0.5');
 // ── Step 3: capture one shot via CDP screencast ───────────────────────────────
 async function captureShot(
   browser,
-  { test, nodeStyle, nodeShape, iconStyle, dotShape, trackPulse, curveBend, out },
+  {
+    test,
+    nodeStyle,
+    nodeShape,
+    iconStyle,
+    dotShape,
+    trackPulse,
+    curveBend,
+    out,
+  },
 ) {
   const outFile = path.resolve(ROOT, out);
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
@@ -225,7 +234,9 @@ async function captureShot(
   // visible/hit-testable, but these controls live in the sidebar `.card`,
   // which the style tag above hides.
   if (iconStyle)
-    await page.evaluate(() => document.getElementById('icon-style-full').click());
+    await page.evaluate(() =>
+      document.getElementById('icon-style-full').click(),
+    );
   if (nodeShape) {
     const shaped = await page.evaluate((shape) => {
       const btn = document.querySelector(`[data-node-shape="${shape}"]`);
@@ -267,7 +278,10 @@ async function captureShot(
     await page.evaluate((bend) => {
       const CURVE_BEND_MAX = 2.5;
       const CURVE_BEND_SLIDER_EXPONENT = 2;
-      const pos = Math.pow(bend / CURVE_BEND_MAX, 1 / CURVE_BEND_SLIDER_EXPONENT);
+      const pos = Math.pow(
+        bend / CURVE_BEND_MAX,
+        1 / CURVE_BEND_SLIDER_EXPONENT,
+      );
       const inp = document.getElementById('curve-bend');
       inp.value = String(pos);
       inp.dispatchEvent(new Event('input', { bubbles: true }));

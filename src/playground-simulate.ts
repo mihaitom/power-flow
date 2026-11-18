@@ -98,16 +98,21 @@ btn.addEventListener('click', () => {
     const hour = (step * STEP_MINUTES) / 60;
 
     // Daylight from 06:00 to 20:00 (14h), peaking at solar noon.
-    const daylight = hour > 6 && hour < 20 ? Math.sin((Math.PI * (hour - 6)) / 14) : 0;
+    const daylight =
+      hour > 6 && hour < 20 ? Math.sin((Math.PI * (hour - 6)) / 14) : 0;
     const solar = hasSolar.checked ? Math.round(7000 * daylight ** 1.4) : 0;
 
     // Smooth background house load: a bit higher in the afternoon, lower overnight.
-    const baseLoad = Math.round(700 + 300 * Math.cos((2 * Math.PI * (hour - 15)) / 24));
+    const baseLoad = Math.round(
+      700 + 300 * Math.cos((2 * Math.PI * (hour - 15)) / 24),
+    );
 
     let consumersSum = 0;
     let directBatteryLoad = 0;
     for (const slot of SLOTS) {
-      const active = slot.windows.find((w) => hour >= w.fromHour && hour < w.toHour);
+      const active = slot.windows.find(
+        (w) => hour >= w.fromHour && hour < w.toHour,
+      );
       const watts = slot.has.checked && active ? active.watts : 0;
       slot.input.value = String(watts);
       if (slot.battery) directBatteryLoad += watts;
@@ -123,7 +128,8 @@ btn.addEventListener('click', () => {
       // The battery must discharge (negative) at least enough to cover its
       // own direct loads — but only push it further negative, never force a
       // charging (positive) reading toward zero when no direct load is active.
-      if (directBatteryLoad > 0) battery = Math.min(battery, -directBatteryLoad);
+      if (directBatteryLoad > 0)
+        battery = Math.min(battery, -directBatteryLoad);
       soc = Math.max(0, Math.min(100, soc + battery * 0.005));
     }
 

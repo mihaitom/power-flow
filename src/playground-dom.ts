@@ -30,14 +30,30 @@ export const inp = Object.fromEntries(
   ids.map((id) => [id, document.getElementById(id) as HTMLInputElement]),
 );
 
-export const hasSolar = document.getElementById('has-solar') as HTMLInputElement;
-export const hasBat = document.getElementById('has-battery') as HTMLInputElement;
-export const hasC1 = document.getElementById('has-consumer1') as HTMLInputElement;
-export const hasC2 = document.getElementById('has-consumer2') as HTMLInputElement;
-export const hasC3 = document.getElementById('has-consumer3') as HTMLInputElement;
-export const hasC4 = document.getElementById('has-consumer4') as HTMLInputElement;
-export const hasBl1 = document.getElementById('has-batteryLoad1') as HTMLInputElement;
-export const hasBl2 = document.getElementById('has-batteryLoad2') as HTMLInputElement;
+export const hasSolar = document.getElementById(
+  'has-solar',
+) as HTMLInputElement;
+export const hasBat = document.getElementById(
+  'has-battery',
+) as HTMLInputElement;
+export const hasC1 = document.getElementById(
+  'has-consumer1',
+) as HTMLInputElement;
+export const hasC2 = document.getElementById(
+  'has-consumer2',
+) as HTMLInputElement;
+export const hasC3 = document.getElementById(
+  'has-consumer3',
+) as HTMLInputElement;
+export const hasC4 = document.getElementById(
+  'has-consumer4',
+) as HTMLInputElement;
+export const hasBl1 = document.getElementById(
+  'has-batteryLoad1',
+) as HTMLInputElement;
+export const hasBl2 = document.getElementById(
+  'has-batteryLoad2',
+) as HTMLInputElement;
 
 export const topoInp = Object.fromEntries(
   TOPOLOGY_KEYS.map((k) => [

@@ -45,8 +45,9 @@ export function apply() {
   (document.getElementById('v-batteryLoad1') as HTMLElement).textContent = fmt(
     +inp.batteryLoad1.value,
   );
-  (document.getElementById('v-batteryLoad2') as HTMLElement).textContent =
-    fmt(+inp.batteryLoad2.value);
+  (document.getElementById('v-batteryLoad2') as HTMLElement).textContent = fmt(
+    +inp.batteryLoad2.value,
+  );
   (document.getElementById('solar-ctrls') as HTMLElement).style.opacity =
     hasSolar.checked ? '1' : '0.4';
   (document.getElementById('battery-ctrls') as HTMLElement).style.opacity =
@@ -54,8 +55,9 @@ export function apply() {
   // Meaningless without a battery (applyBatteryHighlight() in core.ts is
   // already a no-op then) — dim it the same way battery-ctrls dims, so it
   // reads as "currently irrelevant" rather than a live, independent toggle.
-  (document.getElementById('battery-charge-highlight-ctrl') as HTMLElement).style.opacity =
-    hasBat.checked ? '1' : '0.4';
+  (
+    document.getElementById('battery-charge-highlight-ctrl') as HTMLElement
+  ).style.opacity = hasBat.checked ? '1' : '0.4';
   (document.getElementById('consumer1-ctrls') as HTMLElement).style.opacity =
     hasC1.checked ? '1' : '0.4';
   (document.getElementById('consumer2-ctrls') as HTMLElement).style.opacity =
@@ -107,7 +109,9 @@ export { speedInp, vSpeed };
 // ── Appearance ────────────────────────────────────────────────────────────────
 const NODE_STYLES = ['soft', 'tonal', 'outline', 'filled'] as const;
 export let currentNodeStyle: (typeof NODE_STYLES)[number] = 'soft';
-const nodeStyleTabsEl = document.getElementById('node-style-tabs') as HTMLElement;
+const nodeStyleTabsEl = document.getElementById(
+  'node-style-tabs',
+) as HTMLElement;
 export function setNodeStyle(style: (typeof NODE_STYLES)[number]) {
   currentNodeStyle = style;
   nodeStyleTabsEl.querySelectorAll('button').forEach((b) => {
@@ -117,14 +121,18 @@ export function setNodeStyle(style: (typeof NODE_STYLES)[number]) {
 }
 nodeStyleTabsEl.querySelectorAll('button').forEach((b) => {
   b.addEventListener('click', () => {
-    setNodeStyle((b as HTMLElement).dataset.nodeStyle as (typeof NODE_STYLES)[number]);
+    setNodeStyle(
+      (b as HTMLElement).dataset.nodeStyle as (typeof NODE_STYLES)[number],
+    );
     notifyStateChange();
   });
 });
 
 const NODE_SHAPES = ['circle', 'square', 'hexagon'] as const;
 export let currentNodeShape: (typeof NODE_SHAPES)[number] = 'circle';
-const nodeShapeTabsEl = document.getElementById('node-shape-tabs') as HTMLElement;
+const nodeShapeTabsEl = document.getElementById(
+  'node-shape-tabs',
+) as HTMLElement;
 export function setNodeShape(shape: (typeof NODE_SHAPES)[number]) {
   currentNodeShape = shape;
   nodeShapeTabsEl.querySelectorAll('button').forEach((b) => {
@@ -134,14 +142,21 @@ export function setNodeShape(shape: (typeof NODE_SHAPES)[number]) {
 }
 nodeShapeTabsEl.querySelectorAll('button').forEach((b) => {
   b.addEventListener('click', () => {
-    setNodeShape((b as HTMLElement).dataset.nodeShape as (typeof NODE_SHAPES)[number]);
+    setNodeShape(
+      (b as HTMLElement).dataset.nodeShape as (typeof NODE_SHAPES)[number],
+    );
     notifyStateChange();
   });
 });
 
-const iconStyleInp = document.getElementById('icon-style-full') as HTMLInputElement;
+const iconStyleInp = document.getElementById(
+  'icon-style-full',
+) as HTMLInputElement;
 iconStyleInp.addEventListener('input', () => {
-  el.options = { ...el.options, iconStyle: iconStyleInp.checked ? 'full' : 'default' };
+  el.options = {
+    ...el.options,
+    iconStyle: iconStyleInp.checked ? 'full' : 'default',
+  };
 });
 const DOT_SHAPES = ['circle', 'triangle', 'bolt', 'chevron', 'spark'] as const;
 export let currentDotShape: (typeof DOT_SHAPES)[number] = 'circle';
@@ -155,7 +170,9 @@ export function setDotShape(shape: (typeof DOT_SHAPES)[number]) {
 }
 dotShapeTabsEl.querySelectorAll('button').forEach((b) => {
   b.addEventListener('click', () => {
-    setDotShape((b as HTMLElement).dataset.dotShape as (typeof DOT_SHAPES)[number]);
+    setDotShape(
+      (b as HTMLElement).dataset.dotShape as (typeof DOT_SHAPES)[number],
+    );
     notifyStateChange();
   });
 });
@@ -168,7 +185,9 @@ batteryChargeHighlightInp.addEventListener('input', () => {
     batteryChargeHighlight: batteryChargeHighlightInp.checked,
   };
 });
-const trackPulseInp = document.getElementById('track-pulse') as HTMLInputElement;
+const trackPulseInp = document.getElementById(
+  'track-pulse',
+) as HTMLInputElement;
 trackPulseInp.addEventListener('input', () => {
   el.options = { ...el.options, trackPulse: trackPulseInp.checked };
 });
@@ -283,9 +302,16 @@ export function updateGrid() {
   apply();
 }
 
-[consumer1Inp, consumer2Inp, consumer3Inp, consumer4Inp, hasC1, hasC2, hasC3, hasC4].forEach(
-  (e) => e.addEventListener('input', updateLoadMin),
-);
+[
+  consumer1Inp,
+  consumer2Inp,
+  consumer3Inp,
+  consumer4Inp,
+  hasC1,
+  hasC2,
+  hasC3,
+  hasC4,
+].forEach((e) => e.addEventListener('input', updateLoadMin));
 [loadInp, solarInp, batteryInp, hasSolar, hasBat].forEach((e) =>
   e.addEventListener('input', updateGrid),
 );

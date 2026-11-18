@@ -27,7 +27,9 @@ export const DEFAULT_COLORS = Object.fromEntries(
 export function applyColors() {
   el.options = {
     ...el.options,
-    colors: Object.fromEntries(Object.entries(cinp).map(([k, i]) => [k, i.value])),
+    colors: Object.fromEntries(
+      Object.entries(cinp).map(([k, i]) => [k, i.value]),
+    ),
   };
 }
 Object.values(cinp).forEach((i) => i.addEventListener('input', applyColors));

@@ -9,7 +9,9 @@ import type { FlowData, PowerFlowSettings } from './types';
 // already no-ops when `customElements` is unavailable, so the class simply
 // never gets registered (or usefully instantiated) in that environment.
 const HTMLElementBase: typeof HTMLElement =
-  typeof HTMLElement !== 'undefined' ? HTMLElement : (class {} as typeof HTMLElement);
+  typeof HTMLElement !== 'undefined'
+    ? HTMLElement
+    : (class {} as typeof HTMLElement);
 
 /**
  * `<power-flow>` custom element — a framework-agnostic energy-flow diagram.

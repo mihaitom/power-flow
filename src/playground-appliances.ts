@@ -93,7 +93,9 @@ function shuffleAppliances() {
   el.options = { ...el.options, labels, icons: currentIcons };
 }
 
-const appliancesBtn = document.getElementById('shuffle-appliances') as HTMLElement;
+const appliancesBtn = document.getElementById(
+  'shuffle-appliances',
+) as HTMLElement;
 appliancesBtn.addEventListener('click', shuffleAppliances);
 
 // Undoes shuffleAppliances() — back to the library's own generic slot

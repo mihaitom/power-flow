@@ -1,37 +1,36 @@
 # Changelog
 
-All notable changes to this project are documented here. Versions match the
-ones published on [npm](https://www.npmjs.com/package/powerflow).
+All notable changes to this project are documented here. Versions match the ones
+published on [npm](https://www.npmjs.com/package/powerflow).
 
-Reconstructed from git history for versions that predate this file — dates
-are the release commit's date, entries are grouped by what they mean for
-consumers of the package rather than a raw commit log.
+Reconstructed from git history for versions that predate this file — dates are
+the release commit's date, entries are grouped by what they mean for consumers
+of the package rather than a raw commit log.
 
 ## [1.2.0] — 2026-08-02
 
 ### Added
 
-- `nodeShape` option (`'circle'` default / `'square'` / `'hexagon'`) for
-  every node's background and ring, with smooth circle↔square morphing;
-  hexagon is a true regular hexagon (equal side lengths), so it's wider than
-  the other two shapes to keep every side the same length
+- `nodeShape` option (`'circle'` default / `'square'` / `'hexagon'`) for every
+  node's background and ring, with smooth circle↔square morphing; hexagon is a
+  true regular hexagon (equal side lengths), so it's wider than the other two
+  shapes to keep every side the same length
 - Coverage, SoC and battery charge-highlight rings now follow the selected
   `nodeShape` instead of always being circular
-- `trackPulse` option — pulses an actively-carrying track's brightness on
-  top of its traveling dot(s), tempo scaled to that flow's own speed
-- The diagram's `viewBox` widens automatically when `nodeShape: 'hexagon'`
-  is active, so hexagon nodes aren't clipped at the diagram's edge
+- `trackPulse` option — pulses an actively-carrying track's brightness on top of
+  its traveling dot(s), tempo scaled to that flow's own speed
+- The diagram's `viewBox` widens automatically when `nodeShape: 'hexagon'` is
+  active, so hexagon nodes aren't clipped at the diagram's edge
 
 ### Changed
 
-- **Breaking (visual) for explicit `curveBend` values**: `curveBend` now
-  behaves as a corner radius instead of a curve-bulge amount — `0` is a
-  sharp, un-rounded 90° corner and `2.5` (the max) is a direct straight
-  line, the inverse of the previous meaning (where `0` was the straight
-  line and higher values sharpened the corner). Any consumer explicitly
-  setting `curveBend` to a non-default value will see different geometry
-  after upgrading; the default (`1`) still renders a similarly moderate
-  curve
+- **Breaking (visual) for explicit `curveBend` values**: `curveBend` now behaves
+  as a corner radius instead of a curve-bulge amount — `0` is a sharp,
+  un-rounded 90° corner and `2.5` (the max) is a direct straight line, the
+  inverse of the previous meaning (where `0` was the straight line and higher
+  values sharpened the corner). Any consumer explicitly setting `curveBend` to a
+  non-default value will see different geometry after upgrading; the default
+  (`1`) still renders a similarly moderate curve
 
 ## [1.1.0] — 2026-07-31
 
@@ -42,6 +41,7 @@ consumers of the package rather than a raw commit log.
 - Reset-to-defaults functionality for the playground's controls
 
 ### Fixed
+
 - corrected the min+gzip badge/size mentioned in the README
 
 ## [1.0.0] — 2026-07-28
@@ -60,8 +60,8 @@ First stable release.
 
 ### Fixed
 
-- Crash in non-DOM environments (e.g. SSR) — `PowerFlowElement` now falls
-  back to a plain stand-in class when `HTMLElement` isn't available
+- Crash in non-DOM environments (e.g. SSR) — `PowerFlowElement` now falls back
+  to a plain stand-in class when `HTMLElement` isn't available
 
 ## [0.1.4] — 2026-06-06
 

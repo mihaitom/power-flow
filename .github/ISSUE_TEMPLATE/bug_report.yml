@@ -1,7 +1,8 @@
 name: Bug report
-description: Something in the diagram looks wrong or doesn't behave as documented
-title: "[Bug]: "
-labels: ["bug"]
+description:
+  Something in the diagram looks wrong or doesn't behave as documented
+title: '[Bug]: '
+labels: ['bug']
 body:
   - type: markdown
     attributes:
@@ -18,9 +19,8 @@ body:
     attributes:
       label: Playground link showing the issue
       description: >-
-        Reproduce the issue at
-        https://mihaitom.github.io/power-flow/, click "Copy link", and paste
-        the URL here.
+        Reproduce the issue at https://mihaitom.github.io/power-flow/, click
+        "Copy link", and paste the URL here.
       placeholder: https://mihaitom.github.io/power-flow/?s=...
     validations:
       required: true
@@ -37,7 +37,7 @@ body:
     id: version
     attributes:
       label: powerflow version
-      placeholder: "1.2.0"
+      placeholder: '1.2.0'
     validations:
       required: true
 
