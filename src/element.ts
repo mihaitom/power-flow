@@ -42,7 +42,7 @@ export class PowerFlowElement extends HTMLElementBase {
   private _data: FlowData = emptyData();
   private _options: Partial<PowerFlowSettings> | undefined;
 
-  set data(value: FlowData) {
+  set data(value: FlowData | undefined) {
     this._data = value ?? emptyData();
     this.render();
   }

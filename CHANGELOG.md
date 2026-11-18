@@ -24,7 +24,8 @@ of the package rather than a raw commit log.
 
 - Setting `options` on `<power-flow>` now replaces the previous options as
   documented — fields left out return to their defaults instead of keeping an
-  earlier value
+  earlier value. If your code relied on the old merging, spread the previous
+  value: `el.options = { ...el.options, iconStyle: 'full' }`
 - Removing the `data` or `options` attribute from `<power-flow>` now resets it
   to its default instead of keeping the last value
 - `definePowerFlow('my-tag')` now registers the element under an additional tag

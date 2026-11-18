@@ -68,7 +68,7 @@ describe('properties', () => {
     });
     el.options = undefined;
     expect(text('t-solar-val')).toBe('3.2 kW');
-    el.data = undefined as never;
+    el.data = undefined;
     expect(text('t-home-val')).toBe('0 W');
   });
 });
